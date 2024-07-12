@@ -2,6 +2,8 @@ module github.com/usace/cloudcompute
 
 go 1.18
 
+replace github.com/usace/cc-go-sdk => /Users/rdcrlrsg/Projects/programming/hec/cc-go-sdk
+
 require (
 	github.com/aws/aws-sdk-go-v2 v1.27.2
 	github.com/aws/aws-sdk-go-v2/config v1.27.18
@@ -30,6 +32,7 @@ require (
 	github.com/aws/aws-sdk-go-v2/service/sts v1.28.12 // indirect
 	github.com/aws/smithy-go v1.20.2 // indirect
 	github.com/jmespath/go-jmespath v0.4.0 // indirect
+	github.com/mitchellh/mapstructure v1.5.0 // indirect
 	github.com/spf13/cast v1.6.0 // indirect
 	github.com/usace/filesapi v0.0.0-20240603195053-3fa10ec2cb22 // indirect
 )

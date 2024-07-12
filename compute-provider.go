@@ -58,7 +58,7 @@ type TerminateJobOutput struct {
 // function to process the results of each job termination
 type TerminateJobFunction func(output TerminateJobOutput)
 
-// Interface for a compute provider.  Curretnly there is a single implementation for AwsBatch
+// Interface for a compute provider.  Currently there is a single implementation for AwsBatch
 type ComputeProvider interface {
 	SubmitJob(job *Job) error
 	TerminateJobs(input TermminateJobInput) error
@@ -77,8 +77,8 @@ type ContainerOverrides struct {
 }
 
 type ResourceRequirement struct {
-	Type  string
-	Value string
+	Type  string `json:"resource_type" yaml:"resource_type"`
+	Value string `jsoon:"value" yaml:"value"`
 }
 
 // This is a single "job" or unit of compute for a ComputeProvider
@@ -202,8 +202,8 @@ type KeyValuePair struct {
 
 type KeyValuePairs []KeyValuePair
 
-func (kvps KeyValuePairs) HasKey(key string) bool {
-	for _, kvp := range kvps {
+func (kvps *KeyValuePairs) HasKey(key string) bool {
+	for _, kvp := range *kvps {
 		if kvp.Name == key {
 			return true
 		}
@@ -213,8 +213,8 @@ func (kvps KeyValuePairs) HasKey(key string) bool {
 
 // designed to behave like a system env.  Value returned if key is found
 // empty string returned otherwise
-func (kvps KeyValuePairs) GetVal(key string) string {
-	for _, kvp := range kvps {
+func (kvps *KeyValuePairs) GetVal(key string) string {
+	for _, kvp := range *kvps {
 		if kvp.Name == key {
 			return kvp.Value
 		}
@@ -222,16 +222,16 @@ func (kvps KeyValuePairs) GetVal(key string) string {
 	return ""
 }
 
-func (kvps KeyValuePairs) SetVal(key string, val string) KeyValuePairs {
-	for i, kvp := range kvps {
+func (kvps *KeyValuePairs) SetVal(key string, val string) {
+	for i, kvp := range *kvps {
 		if kvp.Name == key {
-			kvps[i].Value = val
+			(*kvps)[i].Value = val
+			return
 		}
 	}
-	//doesn't exist, add a new value
-	kvps = append(kvps, KeyValuePair{
+	// doesn't exist, add a new value
+	*kvps = append(*kvps, KeyValuePair{
 		Name:  key,
 		Value: val,
 	})
-	return kvps
 }

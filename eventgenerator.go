@@ -1,15 +1,70 @@
 package cloudcompute
 
 import (
+	"bufio"
+	"bytes"
 	"errors"
 	"fmt"
+	"io"
 	"log"
+	"strconv"
 )
 
 // EventGenerators provide an iterator type interface to work with sets of events for a Compute.
 type EventGenerator interface {
 	HasNextEvent() bool
 	NextEvent() Event
+}
+
+type StreamingEventGenerator struct {
+	event   Event
+	scanner *bufio.Scanner
+}
+
+func NewStreamingEventGeneratorForReader(event Event, reader io.Reader, delimiter string) (*StreamingEventGenerator, error) {
+	scanner := bufio.NewScanner(reader)
+	scanner.Split(splitAt(delimiter))
+	manifestCount := len(event.Manifests)
+	for i := 0; i < manifestCount; i++ {
+		err := event.Manifests[i].WritePayload()
+		if err != nil {
+			return nil, fmt.Errorf("Failed to write payload for manifest %s: %s\n", event.Manifests[i].ManifestID, err)
+		}
+	}
+	return &StreamingEventGenerator{
+		event:   event,
+		scanner: scanner,
+	}, nil
+}
+
+func NewStreamingEventGenerator(event Event, scanner *bufio.Scanner) (*StreamingEventGenerator, error) {
+	manifestCount := len(event.Manifests)
+	for i := 0; i < manifestCount; i++ {
+		err := event.Manifests[i].WritePayload()
+		if err != nil {
+			return nil, fmt.Errorf("Failed to write payload for manifest %s: %s\n", event.Manifests[i].ManifestID, err)
+		}
+	}
+	return &StreamingEventGenerator{
+		event:   event,
+		scanner: scanner,
+	}, nil
+}
+
+func (seg *StreamingEventGenerator) HasNextEvent() bool {
+	return seg.scanner.Scan()
+}
+
+func (seg *StreamingEventGenerator) NextEvent() Event {
+	event := seg.event
+	nextEvent := seg.scanner.Text()
+	if eventNum, err := strconv.Atoi(nextEvent); err == nil {
+		event.EventNumber = int64(eventNum)
+		return event
+	} else {
+		event.EventNumber = -1 //@TODO returning -1 since the interface does not support error return.  Might want to change this
+		return event
+	}
 }
 
 type ArrayEventGenerator struct {
@@ -129,4 +184,30 @@ type StochasticEvents struct {
 	eventStartIndex  int
 	eventEndIndex    int
 	manifestTemplate ComputeManifest
+}
+
+func splitAt(substring string) func(data []byte, atEOF bool) (advance int, token []byte, err error) {
+	searchBytes := []byte(substring)
+	searchLen := len(searchBytes)
+	return func(data []byte, atEOF bool) (advance int, token []byte, err error) {
+		dataLen := len(data)
+
+		// Return nothing if at end of file and no data passed
+		if atEOF && dataLen == 0 {
+			return 0, nil, nil
+		}
+
+		// Find next separator and return token
+		if i := bytes.Index(data, searchBytes); i >= 0 {
+			return i + searchLen, data[0:i], nil
+		}
+
+		// If we're at EOF, we have a final, non-terminated line. Return it.
+		if atEOF {
+			return dataLen, data, nil
+		}
+
+		// Request more data.
+		return 0, nil, nil
+	}
 }

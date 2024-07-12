@@ -47,56 +47,61 @@ type CloudCompute struct {
 */
 
 // Runs a Compute on the ComputeProvider
+// currently an event number of -1 represents an invalid event received from the event generator.
+// These events are skipped
 func (cc *CloudCompute) Run() error {
 	cc.submissionIdMap = make(map[string]string)
 	for cc.Events.HasNextEvent() {
 		event := cc.Events.NextEvent()
-
-		//go func(event Event) {
-		for _, manifest := range event.Manifests {
-			if len(manifest.Inputs.PayloadAttributes) > 0 || len(manifest.Inputs.DataSources) > 0 {
-				err := manifest.WritePayload() //guarantees the payload id written to the manifest
-				if err != nil {
-					return err
+		if event.EventNumber >= 0 {
+			//go func(event Event) {
+			for _, manifest := range event.Manifests {
+				if len(manifest.Inputs.PayloadAttributes) > 0 || len(manifest.Inputs.DataSources) > 0 || len(manifest.Actions) > 0 {
+					err := manifest.WritePayload() //guarantees the payload id written to the manifest
+					if err != nil {
+						return err
+					}
 				}
-			}
-			env := append(manifest.Inputs.Environment,
-				KeyValuePair{CcPayloadId, manifest.payloadID.String()},
-				KeyValuePair{CcEventID, event.ID.String()})
+				env := append(manifest.Inputs.Environment,
+					KeyValuePair{CcPayloadId, manifest.payloadID.String()},
+					KeyValuePair{CcManifestId, manifest.ManifestID},
+				)
 
-			if !env.HasKey(CcEventNumber) {
-				env = append(env, KeyValuePair{CcEventNumber, fmt.Sprint(event.EventNumber)})
-			}
+				if !env.HasKey(CcEventNumber) {
+					env = append(env, KeyValuePair{CcEventNumber, fmt.Sprint(event.EventNumber)})
+				}
 
-			//the manifest substitution is will be removed in future versions.
-			//it is only supported now to ease the transition to payloadId vs manifestId
-			if !env.HasKey(CcManifestId) {
-				env = append(env, KeyValuePair{CcManifestId, manifest.ManifestID})
-			}
+				//the manifest substitution is will be removed in future versions.
+				//it is only supported now to ease the transition to payloadId vs manifestId
+				if !env.HasKey(CcManifestId) {
+					env = append(env, KeyValuePair{CcManifestId, manifest.ManifestID})
+				}
 
-			env = append(env, KeyValuePair{CcPluginDefinition, manifest.PluginDefinition}) //@TODO do we need this?
-			job := Job{
-				JobName:       fmt.Sprintf("%s_C_%s_E_%s_M_%s", CcProfile, cc.ID.String(), event.ID.String(), manifest.ManifestID),
-				JobQueue:      cc.JobQueue,
-				JobDefinition: manifest.PluginDefinition,
-				DependsOn:     cc.mapDependencies(&manifest),
-				Parameters:    manifest.Inputs.Parameters,
-				Tags:          manifest.Tags,
-				RetryAttemts:  manifest.RetryAttemts,
-				JobTimeout:    manifest.JobTimeout,
-				ContainerOverrides: ContainerOverrides{
-					Environment:          env,
-					Command:              manifest.Command,
-					ResourceRequirements: manifest.ResourceRequirements,
-				},
+				env = append(env, KeyValuePair{CcPluginDefinition, manifest.PluginDefinition}) //@TODO do we need this?
+				job := Job{
+					JobName:       fmt.Sprintf("%s_C_%s_E_%s_M_%s", CcProfile, cc.ID.String(), event.ID.String(), manifest.ManifestID),
+					JobQueue:      cc.JobQueue,
+					JobDefinition: manifest.PluginDefinition,
+					DependsOn:     cc.mapDependencies(&manifest),
+					Parameters:    manifest.Inputs.Parameters,
+					Tags:          manifest.Tags,
+					RetryAttemts:  manifest.RetryAttemts,
+					JobTimeout:    manifest.JobTimeout,
+					ContainerOverrides: ContainerOverrides{
+						Environment:          env,
+						Command:              manifest.Command,
+						ResourceRequirements: manifest.ResourceRequirements,
+					},
+				}
+				err := cc.ComputeProvider.SubmitJob(&job)
+				if err != nil {
+					return err //@TODO what happens if a set submit ok then one fails?  How do we cancel? See notes below
+				}
+				cc.submissionIdMap[manifest.ManifestID] = *job.SubmittedJob.JobId
 			}
-			err := cc.ComputeProvider.SubmitJob(&job)
-			if err != nil {
-				return err //@TODO what happens if a set submit ok then one fails?  How do we cancel? See notes below
-			}
-			cc.submissionIdMap[manifest.ManifestID] = *job.SubmittedJob.JobId
+			//}(event)
 		}
-		//}(event)
+
 	}
 	return nil
 }
@@ -209,8 +214,8 @@ func (cm *ComputeManifest) WritePayload() error {
 type PluginInputs struct {
 	Environment       KeyValuePairs     `json:"environment"`
 	Parameters        map[string]string `json:"parameters"`
-	DataSources       []DataSource      `json:"dataSources"`
-	PayloadAttributes PayloadAttributes `json:"payloadAttributes"`
+	DataSources       []DataSource      `json:"data_sources"`
+	PayloadAttributes PayloadAttributes `json:"payload_attributes"`
 }
 
 /////////////////////////////
@@ -255,6 +260,17 @@ type Plugin struct {
 	Parameters         map[string]string        `json:"parameters" yaml:"parameters"`
 	RetryAttemts       int32                    `json:"retry_attempts" yaml:"retry_attempts"`
 	ExecutionTimeout   *int32                   `json:"execution_timeout" yaml:"execution_timeout"`
+	Privileged         bool                     `json:"privileged" yaml:"privileged"` //assign container privileged execution.  for example to mount linux devices
+	LinuxParameters    LinuxParameters          `json:"linux_parameters" yaml:"linux_parameters"`
+}
+
+type LinuxParameters struct {
+	Devices []LinuxDevice `json:"devices" yaml:"devices"`
+}
+
+type LinuxDevice struct {
+	HostPath      *string `json:"host_path" yaml:"host_path"`
+	ContainerPath *string `json:"container_path" yaml:"container_path"`
 }
 
 type PluginComputeEnvironment struct {

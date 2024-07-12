@@ -119,6 +119,9 @@ func (abp *AwsBatchProvider) RegisterPlugin(plugin *Plugin) (PluginRegistrationO
 			Environment:      kvpToBatchKvp(plugin.DefaultEnvironment),
 			ExecutionRoleArn: &abp.executionRole,
 			Image:            &plugin.ImageAndTag,
+			Privileged:       &plugin.Privileged,
+			LinuxParameters:  toBatchLinuxParams(&plugin.LinuxParameters),
+
 			//MountPoints:      volumesToBatch(plugin.Volumes),
 			//Volumes
 			ResourceRequirements: []types.ResourceRequirement{
@@ -415,6 +418,23 @@ func credsToBatchSecrets(creds []KeyValuePair) []types.Secret {
 		}
 	}
 	return secrets
+}
+
+func toBatchLinuxParams(lp *LinuxParameters) *types.LinuxParameters {
+
+	if lp.Devices == nil || len(lp.Devices) == 0 {
+		return nil
+	}
+	bds := []types.Device{}
+	for _, v := range lp.Devices {
+		bds = append(bds, types.Device{
+			HostPath:      v.HostPath,
+			ContainerPath: v.ContainerPath,
+		})
+	}
+	return &types.LinuxParameters{
+		Devices: bds,
+	}
 }
 
 func paramsMapToKvp(params map[string]string) []types.KeyValuePair {
