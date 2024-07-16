@@ -189,11 +189,13 @@ func (cm *ComputeManifest) WritePayload() error {
 			return err
 		}
 		p := Payload{
-			Attributes: cm.Inputs.PayloadAttributes,
-			Stores:     cm.Stores,
-			Inputs:     cm.Inputs.DataSources,
-			Outputs:    cm.Outputs,
-			Actions:    cm.Actions,
+			IOManager: IOManager{
+				Attributes: cm.Inputs.PayloadAttributes,
+				Stores:     cm.Stores,
+				Inputs:     cm.Inputs.DataSources,
+				Outputs:    cm.Outputs,
+			},
+			Actions: cm.Actions,
 		}
 		err = computeStore.SetPayload(p)
 		if err != nil {
