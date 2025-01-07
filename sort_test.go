@@ -75,35 +75,35 @@ func TestTS5(t *testing.T) {
 	fmt.Println(sorted)
 }
 
-func TestTopoSort(t *testing.T) {
-	manifests := []ComputeManifest{
-		{
-			ManifestID:   "1",
-			Dependencies: []JobDependency{},
-		},
-		{
-			ManifestID:   "2",
-			Dependencies: []JobDependency{{"1"}},
-		},
-		{
-			ManifestID:   "3",
-			Dependencies: []JobDependency{{"2"}},
-		},
-		{
-			ManifestID:   "4",
-			Dependencies: []JobDependency{{"1"}, {"3"}},
-		},
-		{
-			ManifestID:   "5",
-			Dependencies: []JobDependency{{"2"}, {"3"}},
-		},
-	}
-	event := Event{
-		Manifests: manifests,
-	}
-	ordered, err := event.TopoSort()
-	if err != nil {
-		t.Log(err)
-	}
-	fmt.Println(ordered)
-}
+// func TestTopoSort(t *testing.T) {
+// 	manifests := []ComputeManifest{
+// 		{
+// 			ManifestID:   "1",
+// 			Dependencies: []JobDependency{},
+// 		},
+// 		{
+// 			ManifestID:   "2",
+// 			Dependencies: []JobDependency{{"1"}},
+// 		},
+// 		{
+// 			ManifestID:   "3",
+// 			Dependencies: []JobDependency{{"2"}},
+// 		},
+// 		{
+// 			ManifestID:   "4",
+// 			Dependencies: []JobDependency{{"1"}, {"3"}},
+// 		},
+// 		{
+// 			ManifestID:   "5",
+// 			Dependencies: []JobDependency{{"2"}, {"3"}},
+// 		},
+// 	}
+// 	event := Event{
+// 		Manifests: manifests,
+// 	}
+// 	ordered, err := event.TopoSort()
+// 	if err != nil {
+// 		t.Log(err)
+// 	}
+// 	fmt.Println(ordered)
+// }

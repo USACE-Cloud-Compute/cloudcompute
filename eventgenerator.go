@@ -8,6 +8,8 @@ import (
 	"io"
 	"log"
 	"strconv"
+
+	"github.com/google/uuid"
 )
 
 // EventGenerators provide an iterator type interface to work with sets of events for a Compute.
@@ -28,7 +30,7 @@ func NewStreamingEventGeneratorForReader(event Event, reader io.Reader, delimite
 	for i := 0; i < manifestCount; i++ {
 		err := event.Manifests[i].WritePayload()
 		if err != nil {
-			return nil, fmt.Errorf("Failed to write payload for manifest %s: %s\n", event.Manifests[i].ManifestID, err)
+			return nil, fmt.Errorf("failed to write payload for manifest %s: %s", event.Manifests[i].ManifestID, err)
 		}
 	}
 	return &StreamingEventGenerator{
@@ -42,7 +44,7 @@ func NewStreamingEventGenerator(event Event, scanner *bufio.Scanner) (*Streaming
 	for i := 0; i < manifestCount; i++ {
 		err := event.Manifests[i].WritePayload()
 		if err != nil {
-			return nil, fmt.Errorf("Failed to write payload for manifest %s: %s\n", event.Manifests[i].ManifestID, err)
+			return nil, fmt.Errorf("failed to write payload for manifest %s: %s", event.Manifests[i].ManifestID, err)
 		}
 	}
 	return &StreamingEventGenerator{
@@ -168,7 +170,7 @@ func (el *EventList) NextEvent() Event {
 	return event
 }
 
-func getManifest(manifests []ComputeManifest, id string) (ComputeManifest, error) {
+func getManifest(manifests []ComputeManifest, id uuid.UUID) (ComputeManifest, error) {
 	for _, m := range manifests {
 		if m.ManifestID == id {
 			return m, nil

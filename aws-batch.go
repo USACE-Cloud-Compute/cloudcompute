@@ -368,12 +368,12 @@ func toBatchContainerOverrides(co ContainerOverrides) *types.ContainerOverrides 
 	}
 }
 
-func toBatchDependency(jobDependency []JobDependency) []types.JobDependency {
+func toBatchDependency(jobDependency []string) []types.JobDependency {
 	batchDeps := make([]types.JobDependency, len(jobDependency))
 	for i, d := range jobDependency {
 		depCopy := d
 		batchDeps[i] = types.JobDependency{
-			JobId: &depCopy.JobId,
+			JobId: &depCopy,
 		}
 	}
 	return batchDeps

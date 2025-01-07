@@ -29,7 +29,11 @@ type CloudCompute struct {
 	ComputeProvider ComputeProvider `json:"computeProvider"`
 
 	//map of cloud compute job identifier (manifest id) to submitted job identifier (VendorID) in the compute provider
-	submissionIdMap map[string]string
+	submissionIdMap map[uuid.UUID]string
+
+	//Job store is for saving the set of jobs being sent to the compute environment to a
+	//user defined storage location.  Typically something like a relational database
+	JobStore CcJobStore
 }
 
 /*
@@ -50,9 +54,12 @@ type CloudCompute struct {
 // currently an event number of -1 represents an invalid event received from the event generator.
 // These events are skipped
 func (cc *CloudCompute) Run() error {
-	cc.submissionIdMap = make(map[string]string)
+	cc.submissionIdMap = make(map[uuid.UUID]string)
 	for cc.Events.HasNextEvent() {
 		event := cc.Events.NextEvent()
+		//NextEvent does not return errors, so in the case that an event generator is unable to generate
+		//a next event, it will return -1 to represent the error condition.
+		//this can occur when using a streaming event generator with invalid values in the stream
 		if event.EventNumber >= 0 {
 			//go func(event Event) {
 			for _, manifest := range event.Manifests {
@@ -64,7 +71,7 @@ func (cc *CloudCompute) Run() error {
 				}
 				env := append(manifest.Inputs.Environment,
 					KeyValuePair{CcPayloadId, manifest.payloadID.String()},
-					KeyValuePair{CcManifestId, manifest.ManifestID},
+					KeyValuePair{CcManifestId, manifest.ManifestID.String()},
 				)
 
 				if !env.HasKey(CcEventNumber) {
@@ -74,12 +81,16 @@ func (cc *CloudCompute) Run() error {
 				//the manifest substitution is will be removed in future versions.
 				//it is only supported now to ease the transition to payloadId vs manifestId
 				if !env.HasKey(CcManifestId) {
-					env = append(env, KeyValuePair{CcManifestId, manifest.ManifestID})
+					env = append(env, KeyValuePair{CcManifestId, manifest.ManifestID.String()})
 				}
 
 				env = append(env, KeyValuePair{CcPluginDefinition, manifest.PluginDefinition}) //@TODO do we need this?
+				jobID := uuid.New()
 				job := Job{
-					JobName:       fmt.Sprintf("%s_C_%s_E_%s_M_%s", CcProfile, cc.ID.String(), event.ID.String(), manifest.ManifestID),
+					ID:            jobID,
+					EventID:       event.ID,
+					ManifestID:    manifest.ManifestID,
+					JobName:       fmt.Sprintf("%s_C_%s_E_%s_J_%s", CcProfile, cc.ID.String(), event.ID.String(), jobID),
 					JobQueue:      cc.JobQueue,
 					JobDefinition: manifest.PluginDefinition,
 					DependsOn:     cc.mapDependencies(&manifest),
@@ -92,6 +103,12 @@ func (cc *CloudCompute) Run() error {
 						Command:              manifest.Command,
 						ResourceRequirements: manifest.ResourceRequirements,
 					},
+				}
+				if cc.JobStore != nil {
+					err := cc.JobStore.SaveJob(cc.ID, manifest.payloadID, int(event.EventNumber), &job)
+					if err != nil {
+						return err
+					}
 				}
 				err := cc.ComputeProvider.SubmitJob(&job)
 				if err != nil {
@@ -120,7 +137,7 @@ func (cc *CloudCompute) Status(query JobsSummaryQuery) error {
 }
 
 // Requests the run log for a manifest
-func (cc *CloudCompute) Log(manifestId string) ([]string, error) {
+func (cc *CloudCompute) Log(manifestId uuid.UUID) ([]string, error) {
 	if submittedJobId, ok := cc.submissionIdMap[manifestId]; ok {
 		return cc.ComputeProvider.JobLog(submittedJobId)
 	}
@@ -141,11 +158,11 @@ func (cc *CloudCompute) Cancel(reason string) error {
 }
 
 // Maps the Dependency identifiers to the compute environment identifiers received from submitted jobs.
-func (cc *CloudCompute) mapDependencies(manifest *ComputeManifest) []JobDependency {
-	sdeps := make([]JobDependency, len(manifest.Dependencies))
+func (cc *CloudCompute) mapDependencies(manifest *ComputeManifest) []string {
+	sdeps := make([]string, len(manifest.Dependencies))
 	for i, d := range manifest.Dependencies {
-		if sdep, ok := cc.submissionIdMap[d.JobId]; ok {
-			sdeps[i] = JobDependency{sdep}
+		if sdep, ok := cc.submissionIdMap[d]; ok {
+			sdeps[i] = sdep
 		}
 	}
 	return sdeps
@@ -154,23 +171,26 @@ func (cc *CloudCompute) mapDependencies(manifest *ComputeManifest) []JobDependen
 /////////////////////////////
 //////// MANIFEST ///////////
 
+type ManifestDependency struct {
+}
+
 // ComputeManifest is the information necessary to execute a single job in an event
 // @TODO Dependencies could be an array of string but for now is a struct so that we could add additional dependency information should the need arise.
 type ComputeManifest struct {
-	ManifestName         string          `yaml:"manifest_name" json:"manifest_name"`
-	ManifestID           string          `yaml:"manifest_id,omitempty" json:"manifest_id"`
-	Command              []string        `yaml:"command" json:"command" `
-	Dependencies         []JobDependency `yaml:"dependencies" json:"dependencies"`
-	Stores               []DataStore     `yaml:"stores" json:"stores"`
-	Inputs               PluginInputs    `yaml:"inputs" json:"inputs"`
-	Outputs              []DataSource    `yaml:"outputs" json:"outputs"`
-	Actions              []Action
-	PluginDefinition     string                `yaml:"plugin_definition" json:"plugin_definition"` //plugin resource name. "name:version"
-	Tags                 map[string]string     `yaml:"tags" json:"tags"`
-	RetryAttemts         int32                 `yaml:"retry_attempts" json:"retry_attempts"`
-	JobTimeout           int32                 `yaml:"job_timeout" json:"job_timeout"`
-	ResourceRequirements []ResourceRequirement `yaml:"resource_requirements" json:"resource_requirements"`
-	payloadID            uuid.UUID             `yaml:"-" json:"-"`
+	ManifestName         string                `json:"manifest_name" jsonschema:"title=Manifest Name,description=The name for the compute manifest"`
+	ManifestID           uuid.UUID             `json:"manifest_id" jsonschema:"-"`
+	Command              []string              `json:"command" jsonschema:"title=Command Override,description=An optional command override for the plugin"`
+	Dependencies         []uuid.UUID           `json:"dependencies" jsonschema:"-"`
+	Stores               []DataStore           `json:"stores" jsonschema:"title=Stores"`
+	Inputs               PluginInputs          `json:"inputs" jsonschema:"title=Inputs"`
+	Outputs              []DataSource          `json:"outputs" jsonschema:"title=Outputs"`
+	Actions              []Action              `json:"actions" jsonschema:"title=Actions"`
+	PluginDefinition     string                `json:"plugin_definition" jsonschema:"title=Plugin Definition"` //plugin resource name. "name:version"
+	Tags                 map[string]string     `json:"tags" jsonschema:"title=Tags"`
+	RetryAttemts         int32                 `json:"retry_attempts" jsonschema:"title=Retry Attempts Override"`
+	JobTimeout           int32                 `json:"job_timeout" jsonschema:"title=Job Timeout Override"`
+	ResourceRequirements []ResourceRequirement `json:"resource_requirements" jsonschema:"title=Resource Requirement Overrides"`
+	payloadID            uuid.UUID             `json:"-"`
 }
 
 // This is a transitional method that will be removed in a future version
@@ -184,7 +204,7 @@ func (cm *ComputeManifest) GetPayload() uuid.UUID {
 func (cm *ComputeManifest) WritePayload() error {
 	if cm.payloadID == uuid.Nil {
 		payloadId := uuid.New()
-		computeStore, err := NewCcStore(cm.ManifestID, payloadId.String())
+		computeStore, err := NewCcStore(cm.ManifestID.String(), payloadId.String())
 		if err != nil {
 			return err
 		}
@@ -225,9 +245,10 @@ type PluginInputs struct {
 
 // EVENT is a single run through the DAG
 type Event struct {
-	ID          uuid.UUID         `json:"id"`
-	EventNumber int64             `json:"event_number"`
-	Manifests   []ComputeManifest `json:"manifests"`
+	ID              uuid.UUID         `json:"id"`
+	EventNumber     int64             `json:"event_number"`     //@Depricated.  Will be removed in a future release
+	EventIdentifier string            `json:"event_identifier"` //RULES ONLY NUMBERS, STRINGS, DASH, AND UNDERSCORE and <128 chars
+	Manifests       []ComputeManifest `json:"manifests"`
 }
 
 // Adds a manifest to the Event
@@ -250,41 +271,41 @@ func (e *Event) AddManifestAt(m ComputeManifest, i int) {
 // For example when using AWS Batch: "AWS_ACCESS_KEY_ID", "arn:aws:secretsmanager:us-east-1:01010101010:secret:mysecret:AWS_ACCESS_KEY_ID::
 type Plugin struct {
 	//ID                 uuid.UUID
-	Name string `json:"name" yaml:"name"`
+	Name string `json:"name" jsonschema:"title=Name"`
 	//Revision           string                   `json:"revision" yaml:"revision"`
-	ImageAndTag        string                   `json:"image_and_tag" yaml:"image_and_tag"`
-	Description        string                   `json:"description" yaml:"description"`
-	Command            []string                 `json:"command" yaml:"command"`
-	ComputeEnvironment PluginComputeEnvironment `json:"compute_environment" yaml:"compute_environment"`
-	DefaultEnvironment []KeyValuePair           `json:"environment" yaml:"environment"` //default values for the container environment
-	Volumes            []PluginComputeVolumes   `json:"volumes" yaml:"volumes"`
-	Credentials        []KeyValuePair           `json:"credentials" yaml:"credentials"`
-	Parameters         map[string]string        `json:"parameters" yaml:"parameters"`
-	RetryAttemts       int32                    `json:"retry_attempts" yaml:"retry_attempts"`
-	ExecutionTimeout   *int32                   `json:"execution_timeout" yaml:"execution_timeout"`
-	Privileged         bool                     `json:"privileged" yaml:"privileged"` //assign container privileged execution.  for example to mount linux devices
-	LinuxParameters    LinuxParameters          `json:"linux_parameters" yaml:"linux_parameters"`
+	ImageAndTag        string                   `json:"image_and_tag" jsonschema:"title=Image and Tag,description=The docker image and tag"`
+	Description        string                   `json:"description" jsonschema:"title=Description"`
+	Command            []string                 `json:"command" jsonschema:"title=Command,description=The docker command and arguments to run"`
+	ComputeEnvironment PluginComputeEnvironment `json:"compute_environment" jsonschema:"title=Compute Environment,description=CPU and Memory runtime requirements"`
+	DefaultEnvironment []KeyValuePair           `json:"environment" jsonschema:"title=Default Environment Variables,description=The list of default environment variables"` //default values for the container environment
+	Volumes            []PluginComputeVolumes   `json:"volumes" jsonschema:"title=Volume Mounts,description=Storage volumes that need to be mounted to the plugin when it is run"`
+	Credentials        []KeyValuePair           `json:"credentials" jsonschema:"title=Credentials,description=Configures credentials/secrets from the service provider to be injected into the running container.  Note: DO NOT ENTER PASSWORDS OR ACTUAL CREDENTIALS"`
+	Parameters         map[string]string        `json:"parameters" jsonschema:"title=Parameters"`
+	RetryAttemts       int32                    `json:"retry_attempts" jsonschema:"title=Retry Attempts"`
+	ExecutionTimeout   *int32                   `json:"execution_timeout" jsonschema:"title=Execution Timeout (sec)"`
+	Privileged         bool                     `json:"privileged" jsonschema:"title=Requires Privileged Execution"` //assign container privileged execution.  for example to mount linux devices
+	LinuxParameters    LinuxParameters          `json:"linux_parameters" jsonschema:"title=Linux Parameters"`
 }
 
 type LinuxParameters struct {
-	Devices []LinuxDevice `json:"devices" yaml:"devices"`
+	Devices []LinuxDevice `json:"devices" jsonschema:"title=Devices"`
 }
 
 type LinuxDevice struct {
-	HostPath      *string `json:"host_path" yaml:"host_path"`
-	ContainerPath *string `json:"container_path" yaml:"container_path"`
+	HostPath      *string `json:"host_path" jsonschema:"title=Host Path"`
+	ContainerPath *string `json:"container_path" jsonschema:"title=Container Path"`
 }
 
 type PluginComputeEnvironment struct {
-	VCPU   string `json:"vcpu" yaml:"vcpu"`
-	Memory string `json:"memory" yaml:"memory"`
+	VCPU   string `json:"vcpu" jsonschema:"title=Virtual CPUs"`
+	Memory string `json:"memory" jsonschema:"title=Memory in MB"`
 }
 
 type PluginComputeVolumes struct {
-	Name         string `json:"name" yaml:"name"`
-	ResourceName string `json:"resource_name" yaml:"resource_name"`
-	ReadOnly     bool   `json:"read_only" yaml:"read_only"`
-	MountPoint   string `json:"mount_point" yaml:"mount_point"` //default is "/data"
+	Name         string `json:"name" jsonschema:"title=Name"`
+	ResourceName string `json:"resource_name" jsonschema:"title=ResourceName,description=The vendor resource name, e.g. ARN for AWS"`
+	ReadOnly     bool   `json:"read_only" jsonschema:"title=Read Only,description=Check to make this resource read-only"`
+	MountPoint   string `json:"mount_point" jsonschema:"title=Mount Point,description=Path in the running container to mount the volume"` //default is "/data"
 }
 
 type PluginRegistrationOutput struct {
@@ -293,5 +314,27 @@ type PluginRegistrationOutput struct {
 	Revision     int32
 }
 
+/*
 type PluginManifest struct {
+	Plugin
+	Inputs  PluginInputs
+	Outputs []DataSource
+	Actions []Action
+}
+
+type PluginInputsDefinition struct {
+	Environment       KeyValuePairs     `json:"environment"`
+	Parameters        map[string]string `json:"parameters"`
+	DataSources       []DataSource      `json:"data_sources"`
+	PayloadAttributes PayloadAttributes `json:"payload_attributes"`
+}
+*/
+
+type CcJobStore interface {
+	SaveJob(computeId uuid.UUID, payloadId uuid.UUID, eventNumber int, job *Job) error
+}
+
+type CcMessageQueue interface {
+	SendMessage(channel string, message []byte) error
+	Subscribe(channel string) (<-chan any, error) //amqp.Delivery
 }

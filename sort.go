@@ -2,6 +2,8 @@ package cloudcompute
 
 import (
 	"errors"
+
+	"github.com/google/uuid"
 )
 
 // Interface for supporting Topological sort in Manifests (or other structs that would use a toposort)
@@ -10,23 +12,23 @@ type TopoSortable[T comparable] interface {
 	Deps() []T
 }
 
-// Manifest Node sort function for string IDs
-func (m ComputeManifest) Node() string {
+// Manifest Node sort function for uuid IDs
+func (m ComputeManifest) Node() uuid.UUID {
 	return m.ManifestID
 }
 
-// Manifest Deps sort function for a slice of string dependencies
-func (m ComputeManifest) Deps() []string {
-	deps := []string{}
+// Manifest Deps sort function for a slice of uuid dependencies
+func (m ComputeManifest) Deps() []uuid.UUID {
+	deps := []uuid.UUID{}
 	for _, d := range m.Dependencies {
-		deps = append(deps, d.JobId)
+		deps = append(deps, d)
 	}
 	return deps
 }
 
 // Topological Sort function for an Event
 // returns an ordered list of manifest IDs
-func (e *Event) TopoSort() ([]string, error) {
+func (e *Event) TopoSort() ([]uuid.UUID, error) {
 	digraph := depsToGraph(e.toTopoSortable())
 	if len(digraph) == 0 {
 		return nil, errors.New("No dependencies beween manifests provided")
@@ -34,8 +36,8 @@ func (e *Event) TopoSort() ([]string, error) {
 	return TopologicalSort(digraph)
 }
 
-func (e *Event) toTopoSortable() []TopoSortable[string] {
-	a := []TopoSortable[string]{}
+func (e *Event) toTopoSortable() []TopoSortable[uuid.UUID] {
+	a := []TopoSortable[uuid.UUID]{}
 	for _, v := range e.Manifests {
 		a = append(a, v)
 	}

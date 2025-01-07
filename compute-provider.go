@@ -84,13 +84,14 @@ type ResourceRequirement struct {
 // This is a single "job" or unit of compute for a ComputeProvider
 // Essentually it is a mapping of a single Manifest
 type Job struct {
+	ID                 uuid.UUID
 	EventID            uuid.UUID
 	ManifestID         uuid.UUID
 	JobName            string
 	JobQueue           string
 	JobDefinition      string
 	ContainerOverrides ContainerOverrides
-	DependsOn          []JobDependency
+	DependsOn          []string //compute provider dependencies
 	Parameters         map[string]string
 	Tags               map[string]string
 	RetryAttemts       int32
@@ -102,11 +103,11 @@ type Job struct {
 // When created for a manifest, the JobId value should be the manifestId. When a Compute
 // is run, Compute will map manifestIds to submitted JobIds as they are submitted and
 // handle the dependency mapping for the compute environment
-type JobDependency struct {
-	//Cloud Compute Job Identifier
-	//should be ManifestID when being added as a dependency in a Manifest
-	JobId string
-}
+// type JobDependency struct {
+// 	//Cloud Compute Job Identifier
+// 	//should be ManifestID when being added as a dependency in a Manifest
+// 	JobId uuid.UUID
+// }
 
 type VendorJob interface {
 	ID() string
