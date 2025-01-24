@@ -3,8 +3,10 @@ package cloudcompute
 import (
 	"errors"
 	"fmt"
+	"log"
 
 	. "github.com/usace/cc-go-sdk"
+	"github.com/usace/cloudcompute/utils"
 
 	"github.com/google/uuid"
 )
@@ -56,68 +58,73 @@ type CloudCompute struct {
 func (cc *CloudCompute) Run() error {
 	cc.submissionIdMap = make(map[uuid.UUID]string)
 	for cc.Events.HasNextEvent() {
-		event := cc.Events.NextEvent()
-		//NextEvent does not return errors, so in the case that an event generator is unable to generate
-		//a next event, it will return -1 to represent the error condition.
-		//this can occur when using a streaming event generator with invalid values in the stream
-		if event.EventNumber >= 0 {
-			//go func(event Event) {
-			for _, manifest := range event.Manifests {
-				if len(manifest.Inputs.PayloadAttributes) > 0 || len(manifest.Inputs.DataSources) > 0 || len(manifest.Actions) > 0 {
-					err := manifest.WritePayload() //guarantees the payload id written to the manifest
-					if err != nil {
-						return err
-					}
-				}
-				env := append(manifest.Inputs.Environment,
-					KeyValuePair{CcPayloadId, manifest.payloadID.String()},
-					KeyValuePair{CcManifestId, manifest.ManifestID.String()},
-				)
+		event, eventErr := cc.Events.NextEvent()
 
-				if !env.HasKey(CcEventNumber) {
-					env = append(env, KeyValuePair{CcEventNumber, fmt.Sprint(event.EventNumber)})
-				}
-
-				//the manifest substitution is will be removed in future versions.
-				//it is only supported now to ease the transition to payloadId vs manifestId
-				if !env.HasKey(CcManifestId) {
-					env = append(env, KeyValuePair{CcManifestId, manifest.ManifestID.String()})
-				}
-
-				env = append(env, KeyValuePair{CcPluginDefinition, manifest.PluginDefinition}) //@TODO do we need this?
-				jobID := uuid.New()
-				job := Job{
-					ID:            jobID,
-					EventID:       event.ID,
-					ManifestID:    manifest.ManifestID,
-					JobName:       fmt.Sprintf("%s_C_%s_E_%s_J_%s", CcProfile, cc.ID.String(), event.ID.String(), jobID),
-					JobQueue:      cc.JobQueue,
-					JobDefinition: manifest.PluginDefinition,
-					DependsOn:     cc.mapDependencies(&manifest),
-					Parameters:    manifest.Inputs.Parameters,
-					Tags:          manifest.Tags,
-					RetryAttemts:  manifest.RetryAttemts,
-					JobTimeout:    manifest.JobTimeout,
-					ContainerOverrides: ContainerOverrides{
-						Environment:          env,
-						Command:              manifest.Command,
-						ResourceRequirements: manifest.ResourceRequirements,
-					},
-				}
-				if cc.JobStore != nil {
-					err := cc.JobStore.SaveJob(cc.ID, manifest.payloadID, int(event.EventNumber), &job)
-					if err != nil {
-						return err
-					}
-				}
-				err := cc.ComputeProvider.SubmitJob(&job)
-				if err != nil {
-					return err //@TODO what happens if a set submit ok then one fails?  How do we cancel? See notes below
-				}
-				cc.submissionIdMap[manifest.ManifestID] = *job.SubmittedJob.JobId
-			}
-			//}(event)
+		//the event generator returns an error if it cannot generate a valid event
+		//processing will continue when a valid event is generated.  An example would be
+		//generating events from csv that includes invalid values (emply starting or ending values)
+		if eventErr != nil {
+			log.Printf("error generating next event: %s\n", eventErr)
+			continue
 		}
+
+		//go func(event Event) {
+		for _, manifest := range event.Manifests {
+			if len(manifest.Inputs.PayloadAttributes) > 0 || len(manifest.Inputs.DataSources) > 0 || len(manifest.Actions) > 0 {
+				err := manifest.WritePayload() //guarantees the payload id written to the manifest
+				if err != nil {
+					return err
+				}
+			}
+			env := append(manifest.Inputs.Environment,
+				KeyValuePair{CcPayloadId, manifest.payloadID.String()},
+				KeyValuePair{CcManifestId, manifest.ManifestID.String()},
+			)
+
+			if !env.HasKey(CcEventIdentifier) {
+				env = append(env, KeyValuePair{CcEventIdentifier, fmt.Sprint(event.EventIdentifier)})
+				env = append(env, KeyValuePair{CcEventNumber, fmt.Sprint(event.EventIdentifier)})
+			}
+
+			//the manifest substitution is will be removed in future versions.
+			//it is only supported now to ease the transition to payloadId vs manifestId
+			if !env.HasKey(CcManifestId) {
+				env = append(env, KeyValuePair{CcManifestId, manifest.ManifestID.String()})
+			}
+
+			env = append(env, KeyValuePair{CcPluginDefinition, manifest.PluginDefinition}) //@TODO do we need this?
+			jobID := uuid.New()
+			job := Job{
+				ID:            jobID,
+				EventID:       event.ID,
+				ManifestID:    manifest.ManifestID,
+				JobName:       fmt.Sprintf("%s_C_%s_E_%s_J_%s", CcProfile, cc.ID.String(), event.ID.String(), jobID),
+				JobQueue:      cc.JobQueue,
+				JobDefinition: manifest.PluginDefinition,
+				DependsOn:     cc.mapDependencies(&manifest),
+				Parameters:    manifest.Inputs.Parameters,
+				Tags:          manifest.Tags,
+				RetryAttemts:  manifest.RetryAttemts,
+				JobTimeout:    manifest.JobTimeout,
+				ContainerOverrides: ContainerOverrides{
+					Environment:          env,
+					Command:              manifest.Command,
+					ResourceRequirements: manifest.ResourceRequirements,
+				},
+			}
+			if cc.JobStore != nil {
+				err := cc.JobStore.SaveJob(cc.ID, manifest.payloadID, event.EventIdentifier, &job)
+				if err != nil {
+					return err //@TODO should we terminate everything if we cannot save to the compute store?
+				}
+			}
+			err := cc.ComputeProvider.SubmitJob(&job)
+			if err != nil {
+				return err //@TODO what happens if a set submit ok then one fails?  How do we cancel? See notes below
+			}
+			cc.submissionIdMap[manifest.ManifestID] = *job.SubmittedJob.JobId
+		}
+		//}(event)
 
 	}
 	return nil
@@ -171,8 +178,8 @@ func (cc *CloudCompute) mapDependencies(manifest *ComputeManifest) []string {
 /////////////////////////////
 //////// MANIFEST ///////////
 
-type ManifestDependency struct {
-}
+// type ManifestDependency struct {
+// }
 
 // ComputeManifest is the information necessary to execute a single job in an event
 // @TODO Dependencies could be an array of string but for now is a struct so that we could add additional dependency information should the need arise.
@@ -230,7 +237,39 @@ func (cm *ComputeManifest) WritePayload() error {
 	return nil
 }
 
-//JobDefinition string            `yaml:"job_definition"`
+type ComputeManifests []ComputeManifest
+
+func (cm *ComputeManifests) Len() int {
+	cms := []ComputeManifest(*cm)
+	return len(cms)
+}
+
+func (cm *ComputeManifests) GetManifest(id uuid.UUID, deepcopy bool) (int, *ComputeManifest, error) {
+	for i, m := range *cm {
+		if m.ManifestID == id {
+			if !deepcopy {
+				return i, &m, nil
+			} else {
+				manifestcopy := ComputeManifest{}
+				err := utils.Copy(&m).To(&manifestcopy)
+				return i, &manifestcopy, err
+			}
+		}
+	}
+	return -1, nil, errors.New("compute manifest id is not in the list of manifests")
+}
+
+func (cm *ComputeManifests) GetManifestByIndex(index int, deepcopy bool) (*ComputeManifest, error) {
+	manifests := []ComputeManifest(*cm)
+	m := manifests[index]
+	if !deepcopy {
+		return &m, nil
+	} else {
+		manifestcopy := ComputeManifest{}
+		err := utils.Copy(&m).To(&manifestcopy)
+		return &manifestcopy, err
+	}
+}
 
 // Job level inputs that can be injected into a container
 type PluginInputs struct {
@@ -245,9 +284,9 @@ type PluginInputs struct {
 
 // EVENT is a single run through the DAG
 type Event struct {
-	ID              uuid.UUID         `json:"id"`
-	EventNumber     int64             `json:"event_number"`     //@Depricated.  Will be removed in a future release
-	EventIdentifier string            `json:"event_identifier"` //RULES ONLY NUMBERS, STRINGS, DASH, AND UNDERSCORE and <128 chars
+	ID uuid.UUID `json:"id"`
+	//EventNumber     int64             `json:"event_number"`     //@Depricated.  Will be removed in a future release
+	EventIdentifier string            `json:"event"` //RULES ONLY NUMBERS, STRINGS, DASH, AND UNDERSCORE
 	Manifests       []ComputeManifest `json:"manifests"`
 }
 
@@ -331,7 +370,7 @@ type PluginInputsDefinition struct {
 */
 
 type CcJobStore interface {
-	SaveJob(computeId uuid.UUID, payloadId uuid.UUID, eventNumber int, job *Job) error
+	SaveJob(computeId uuid.UUID, payloadId uuid.UUID, event string, job *Job) error
 }
 
 type CcMessageQueue interface {

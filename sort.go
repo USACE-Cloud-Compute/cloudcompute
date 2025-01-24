@@ -2,6 +2,7 @@ package cloudcompute
 
 import (
 	"errors"
+	"fmt"
 
 	"github.com/google/uuid"
 )
@@ -42,6 +43,25 @@ func (e *Event) toTopoSortable() []TopoSortable[uuid.UUID] {
 		a = append(a, v)
 	}
 	return a
+}
+
+func (e *Event) SortManifests() error {
+	manifestCount := len(e.Manifests)
+	if manifestCount > 1 {
+		orderedIds, err := e.TopoSort()
+		if err != nil {
+			return fmt.Errorf("unable to order event %s: %s\n", e.ID, err)
+		}
+		orderedManifests := make([]ComputeManifest, manifestCount)
+		for i, oid := range orderedIds {
+			orderedManifests[i], err = getManifest(e.Manifests, oid)
+			if err != nil {
+				return fmt.Errorf("unable to order event %s: %s\n", e.ID, err)
+			}
+		}
+		e.Manifests = orderedManifests
+	}
+	return nil
 }
 
 // Converts nodal dependency relationships into a dependncy graph that can be used for a topological sort.

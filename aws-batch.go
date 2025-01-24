@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/aws/aws-sdk-go-v2/aws"
+	"github.com/aws/aws-sdk-go-v2/aws/retry"
 	"github.com/aws/aws-sdk-go-v2/config"
 	"github.com/aws/aws-sdk-go-v2/service/batch"
 	"github.com/aws/aws-sdk-go-v2/service/batch/types"
@@ -40,6 +41,19 @@ type AwsBatchProvider struct {
 	client        *batch.Client
 	logs          *cloudwatchlogs.Client
 	executionRole string
+}
+
+func NewAwsBatchProviderInput(executionRole string, batchRegion string, configProfile string) AwsBatchProviderInput {
+	return AwsBatchProviderInput{
+		ExecutionRole: executionRole,
+		BatchRegion:   batchRegion,
+		ConfigProfile: configProfile,
+		Options: []func(o *config.LoadOptions) error{
+			config.WithRetryer(func() aws.Retryer {
+				return retry.AddWithMaxAttempts(retry.NewStandard(), 0)
+			}),
+		},
+	}
 }
 
 func NewAwsBatchProvider(input AwsBatchProviderInput) (*AwsBatchProvider, error) {

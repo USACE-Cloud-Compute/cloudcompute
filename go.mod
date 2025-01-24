@@ -1,8 +1,10 @@
 module github.com/usace/cloudcompute
 
-go 1.18
+go 1.21
 
-//replace github.com/usace/cc-go-sdk => /Users/rdcrlrsg/Projects/programming/hec/cc-go-sdk
+toolchain go1.23.4
+
+replace github.com/usace/cc-go-sdk => /workspaces/cc-go-sdk
 
 require (
 	github.com/aws/aws-sdk-go-v2 v1.27.2
@@ -14,6 +16,7 @@ require (
 )
 
 require (
+	dario.cat/mergo v1.0.1 // indirect
 	github.com/aws/aws-sdk-go-v2/aws/protocol/eventstream v1.6.2 // indirect
 	github.com/aws/aws-sdk-go-v2/credentials v1.17.18 // indirect
 	github.com/aws/aws-sdk-go-v2/feature/ec2/imds v1.16.5 // indirect
@@ -31,8 +34,14 @@ require (
 	github.com/aws/aws-sdk-go-v2/service/ssooidc v1.24.5 // indirect
 	github.com/aws/aws-sdk-go-v2/service/sts v1.28.12 // indirect
 	github.com/aws/smithy-go v1.20.2 // indirect
+	github.com/bahlo/generic-list-go v0.2.0 // indirect
+	github.com/buger/jsonparser v1.1.1 // indirect
+	github.com/invopop/jsonschema v0.13.0 // indirect
 	github.com/jmespath/go-jmespath v0.4.0 // indirect
+	github.com/mailru/easyjson v0.7.7 // indirect
 	github.com/mitchellh/mapstructure v1.5.0 // indirect
 	github.com/spf13/cast v1.6.0 // indirect
 	github.com/usace/filesapi v0.0.0-20240603195053-3fa10ec2cb22 // indirect
+	github.com/wk8/go-ordered-map/v2 v2.1.8 // indirect
+	gopkg.in/yaml.v3 v3.0.1 // indirect
 )
