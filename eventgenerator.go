@@ -7,10 +7,12 @@ import (
 	"fmt"
 	"io"
 	"log"
+	"reflect"
 	"strconv"
 
 	"dario.cat/mergo"
 	"github.com/google/uuid"
+	. "github.com/usace/cc-go-sdk"
 )
 
 //@TODO EventGenerators must be "thread safe"
@@ -156,8 +158,8 @@ func (el *EventList) NextEvent() (Event, error) {
 }
 
 type BatchEvent struct {
-	EventIdentifier   string            `json:"eventIdentifier"`
-	ManifestOverrides []ComputeManifest `json:"manifest"`
+	EventIdentifier   string          `json:"eventIdentifier"`
+	ManifestOverrides ComputeManifest `json:"manifest"`
 }
 
 type BatchEventGenerator struct {
@@ -167,8 +169,8 @@ type BatchEventGenerator struct {
 	size  int
 }
 
-func NewBatchEventGenerator(event Event, batch []BatchEvent) BatchEventGenerator {
-	return BatchEventGenerator{
+func NewBatchEventGenerator(event Event, batch []BatchEvent) *BatchEventGenerator {
+	return &BatchEventGenerator{
 		event: event,
 		batch: batch,
 		size:  len(batch),
@@ -189,11 +191,11 @@ func (beg *BatchEventGenerator) NextEvent() (Event, error) {
 		if err != nil {
 			return Event{}, err
 		}
-		err = mergo.Merge(manifest, batchevent.ManifestOverrides[i])
+		mergedManifest, err := mergeComputeManifest(*manifest, batchevent.ManifestOverrides)
 		if err != nil {
 			return Event{}, err
 		}
-		mergedManifests[i] = *manifest
+		mergedManifests[i] = mergedManifest
 	}
 	beg.index++
 	nextEvent := Event{
@@ -204,9 +206,61 @@ func (beg *BatchEventGenerator) NextEvent() (Event, error) {
 	return nextEvent, nil
 }
 
-/////////////////////////////////////////
-///private functions
-/////////////////////////////////////////
+// ///////////////////////////////////////
+// /private functions
+// ///////////////////////////////////////
+
+func mergePayloadAttributes(dst, src PayloadAttributes) PayloadAttributes {
+	if dst == nil {
+		dst = make(PayloadAttributes)
+	}
+	for key, value := range src {
+		if _, exists := dst[key]; !exists || value != nil {
+			dst[key] = value
+		}
+	}
+	return dst
+}
+
+func mergeComputeManifest(dst, src ComputeManifest) (ComputeManifest, error) {
+	//Merge PayloadAttribute maps manually
+	dst.Inputs.PayloadAttributes = mergePayloadAttributes(dst.Inputs.PayloadAttributes, src.Inputs.PayloadAttributes)
+	for i := range dst.Actions {
+		dst.Actions[i].Attributes = mergePayloadAttributes(dst.Actions[i].Attributes, src.Actions[i].Attributes)
+	}
+
+	// Use mergo to merge other fields
+	if err := mergo.Merge(&dst, src, mergo.WithTransformers(uuidTransformer{})); err != nil {
+		return ComputeManifest{}, err
+	}
+
+	return dst, nil
+}
+
+// mergo does not properly recognize zero but non nil value UUIDs as empty
+// and therefore will not overwrite them .  The uuidTransfoermer modifies mergo
+// to replace zero uuid values in the destination with non-zero values in the src
+type uuidTransformer struct{}
+
+func (t uuidTransformer) Transformer(typ reflect.Type) func(dst, src reflect.Value) error {
+	if typ == reflect.TypeOf(uuid.UUID{}) {
+		return func(dst, src reflect.Value) error {
+			if dst.CanSet() {
+				if src.Interface().(uuid.UUID) != uuid.Nil {
+					dst.Set(src)
+				}
+			}
+			return nil
+		}
+	}
+	return nil
+}
+
+func mergeUUID(dst, src reflect.Value) {
+	if src.Interface().(uuid.UUID) != uuid.Nil {
+		dst.Set(src)
+	}
+}
 
 func getManifest(manifests []ComputeManifest, id uuid.UUID) (ComputeManifest, error) {
 	for _, m := range manifests {

@@ -184,19 +184,19 @@ func (cc *CloudCompute) mapDependencies(manifest *ComputeManifest) []string {
 // ComputeManifest is the information necessary to execute a single job in an event
 // @TODO Dependencies could be an array of string but for now is a struct so that we could add additional dependency information should the need arise.
 type ComputeManifest struct {
-	ManifestName         string                `json:"manifest_name" jsonschema:"title=Manifest Name,description=The name for the compute manifest"`
-	ManifestID           uuid.UUID             `json:"manifest_id" jsonschema:"-"`
-	Command              []string              `json:"command" jsonschema:"title=Command Override,description=An optional command override for the plugin"`
-	Dependencies         []uuid.UUID           `json:"dependencies" jsonschema:"-"`
-	Stores               []DataStore           `json:"stores" jsonschema:"title=Stores"`
-	Inputs               PluginInputs          `json:"inputs" jsonschema:"title=Inputs"`
-	Outputs              []DataSource          `json:"outputs" jsonschema:"title=Outputs"`
-	Actions              []Action              `json:"actions" jsonschema:"title=Actions"`
-	PluginDefinition     string                `json:"plugin_definition" jsonschema:"title=Plugin Definition"` //plugin resource name. "name:version"
-	Tags                 map[string]string     `json:"tags" jsonschema:"title=Tags"`
-	RetryAttemts         int32                 `json:"retry_attempts" jsonschema:"title=Retry Attempts Override"`
-	JobTimeout           int32                 `json:"job_timeout" jsonschema:"title=Job Timeout Override"`
-	ResourceRequirements []ResourceRequirement `json:"resource_requirements" jsonschema:"title=Resource Requirement Overrides"`
+	ManifestName         string                `json:"manifest_name,omitempty" jsonschema:"title=Manifest Name,description=The name for the compute manifest"`
+	ManifestID           uuid.UUID             `json:"manifest_id,omitempty" jsonschema:"-"`
+	Command              []string              `json:"command,omitempty" jsonschema:"title=Command Override,description=An optional command override for the plugin"`
+	Dependencies         []uuid.UUID           `json:"dependencies,omitempty" jsonschema:"-"`
+	Stores               []DataStore           `json:"stores,omitempty" jsonschema:"title=Stores"`
+	Inputs               PluginInputs          `json:"inputs,omitempty" jsonschema:"title=Inputs"`
+	Outputs              []DataSource          `json:"outputs,omitempty" jsonschema:"title=Outputs"`
+	Actions              []Action              `json:"actions,omitempty" jsonschema:"title=Actions"`
+	PluginDefinition     string                `json:"plugin_definition,omitempty" jsonschema:"title=Plugin Definition"` //plugin resource name. "name:version"
+	Tags                 map[string]string     `json:"tags,omitempty" jsonschema:"title=Tags"`
+	RetryAttemts         int32                 `json:"retry_attempts,omitempty" jsonschema:"title=Retry Attempts Override"`
+	JobTimeout           int32                 `json:"job_timeout,omitempty" jsonschema:"title=Job Timeout Override"`
+	ResourceRequirements []ResourceRequirement `json:"resource_requirements,omitempty" jsonschema:"title=Resource Requirement Overrides"`
 	payloadID            uuid.UUID             `json:"-"`
 }
 
@@ -273,10 +273,10 @@ func (cm *ComputeManifests) GetManifestByIndex(index int, deepcopy bool) (*Compu
 
 // Job level inputs that can be injected into a container
 type PluginInputs struct {
-	Environment       KeyValuePairs     `json:"environment"`
-	Parameters        map[string]string `json:"parameters"`
-	DataSources       []DataSource      `json:"data_sources"`
-	PayloadAttributes PayloadAttributes `json:"payload_attributes"`
+	Environment       KeyValuePairs     `json:"environment,omitempty"`
+	Parameters        map[string]string `json:"parameters,omitempty"`
+	DataSources       []DataSource      `json:"data_sources,omitempty"`
+	PayloadAttributes PayloadAttributes `json:"payload_attributes,omitempty"`
 }
 
 /////////////////////////////
