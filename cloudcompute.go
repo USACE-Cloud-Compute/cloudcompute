@@ -30,9 +30,6 @@ type CloudCompute struct {
 	//compute provider for the compute (typically AwsBatchProvider)
 	ComputeProvider ComputeProvider `json:"computeProvider"`
 
-	//map of cloud compute job identifier (manifest id) to submitted job identifier (VendorID) in the compute provider
-	submissionIdMap map[uuid.UUID]string
-
 	//Job store is for saving the set of jobs being sent to the compute environment to a
 	//user defined storage location.  Typically something like a relational database
 	JobStore CcJobStore
@@ -56,9 +53,11 @@ type CloudCompute struct {
 // currently an event number of -1 represents an invalid event received from the event generator.
 // These events are skipped
 func (cc *CloudCompute) Run() error {
-	cc.submissionIdMap = make(map[uuid.UUID]string)
+	//cc.submissionIdMap = make(map[uuid.UUID]string)
 	for cc.Events.HasNextEvent() {
+
 		event, eventErr := cc.Events.NextEvent()
+		event.submissionIdMap = make(map[uuid.UUID]string) //reduce the scope of the idmap to a single event
 
 		//the event generator returns an error if it cannot generate a valid event
 		//processing will continue when a valid event is generated.  An example would be
@@ -101,7 +100,7 @@ func (cc *CloudCompute) Run() error {
 				JobName:       fmt.Sprintf("%s_C_%s_E_%s_J_%s", CcProfile, cc.ID.String(), event.ID.String(), jobID),
 				JobQueue:      cc.JobQueue,
 				JobDefinition: manifest.PluginDefinition,
-				DependsOn:     cc.mapDependencies(&manifest),
+				DependsOn:     event.mapDependencies(&manifest),
 				Parameters:    manifest.Inputs.Parameters,
 				Tags:          manifest.Tags,
 				RetryAttemts:  manifest.RetryAttemts,
@@ -112,21 +111,19 @@ func (cc *CloudCompute) Run() error {
 					ResourceRequirements: manifest.ResourceRequirements,
 				},
 			}
+			err := cc.ComputeProvider.SubmitJob(&job)
+			if err != nil {
+				return err //@TODO what happens if a set submit ok then one fails?  How do we cancel? See notes below
+			}
 			if cc.JobStore != nil {
 				err := cc.JobStore.SaveJob(cc.ID, manifest.payloadID, event.EventIdentifier, &job)
 				if err != nil {
 					return err //@TODO should we terminate everything if we cannot save to the compute store?
 				}
 			}
-			err := cc.ComputeProvider.SubmitJob(&job)
-			if err != nil {
-				return err //@TODO what happens if a set submit ok then one fails?  How do we cancel? See notes below
-			}
-			cc.submissionIdMap[manifest.ManifestID] = *job.SubmittedJob.JobId
+			event.submissionIdMap[manifest.ManifestID] = *job.SubmittedJob.JobId
 		}
-		//}(event)
-
-	}
+	} //end of event loop
 	return nil
 }
 
@@ -144,12 +141,12 @@ func (cc *CloudCompute) Status(query JobsSummaryQuery) error {
 }
 
 // Requests the run log for a manifest
-func (cc *CloudCompute) Log(manifestId uuid.UUID) ([]string, error) {
-	if submittedJobId, ok := cc.submissionIdMap[manifestId]; ok {
-		return cc.ComputeProvider.JobLog(submittedJobId)
-	}
-	return nil, errors.New(fmt.Sprintf("Invalid Manifest ID: %v", manifestId))
-}
+// func (cc *CloudCompute) Log(manifestId uuid.UUID) ([]string, error) {
+// 	if submittedJobId, ok := cc.submissionIdMap[manifestId]; ok {
+// 		return cc.ComputeProvider.JobLog(submittedJobId)
+// 	}
+// 	return nil, errors.New(fmt.Sprintf("Invalid Manifest ID: %v", manifestId))
+// }
 
 // Cancels jobs submitted to compute environment
 func (cc *CloudCompute) Cancel(reason string) error {
@@ -165,15 +162,15 @@ func (cc *CloudCompute) Cancel(reason string) error {
 }
 
 // Maps the Dependency identifiers to the compute environment identifiers received from submitted jobs.
-func (cc *CloudCompute) mapDependencies(manifest *ComputeManifest) []string {
-	sdeps := make([]string, len(manifest.Dependencies))
-	for i, d := range manifest.Dependencies {
-		if sdep, ok := cc.submissionIdMap[d]; ok {
-			sdeps[i] = sdep
-		}
-	}
-	return sdeps
-}
+// func (cc *CloudCompute) mapDependencies(manifest *ComputeManifest) []string {
+// 	sdeps := make([]string, len(manifest.Dependencies))
+// 	for i, d := range manifest.Dependencies {
+// 		if sdep, ok := cc.submissionIdMap[d]; ok {
+// 			sdeps[i] = sdep
+// 		}
+// 	}
+// 	return sdeps
+// }
 
 /////////////////////////////
 //////// MANIFEST ///////////
@@ -288,6 +285,9 @@ type Event struct {
 	//EventNumber     int64             `json:"event_number"`     //@Depricated.  Will be removed in a future release
 	EventIdentifier string            `json:"event"` //RULES ONLY NUMBERS, STRINGS, DASH, AND UNDERSCORE
 	Manifests       []ComputeManifest `json:"manifests"`
+
+	//map of cloud compute job identifier (manifest id) to submitted job identifier (VendorID) in the compute provider
+	submissionIdMap map[uuid.UUID]string
 }
 
 // Adds a manifest to the Event
@@ -299,6 +299,17 @@ func (e *Event) AddManifest(m ComputeManifest) {
 func (e *Event) AddManifestAt(m ComputeManifest, i int) {
 	e.Manifests = append(e.Manifests[:i+1], e.Manifests[i:]...)
 	e.Manifests[i] = m
+}
+
+// Maps the Dependency identifiers to the compute environment identifiers received from submitted jobs.
+func (e *Event) mapDependencies(manifest *ComputeManifest) []string {
+	sdeps := make([]string, len(manifest.Dependencies))
+	for i, d := range manifest.Dependencies {
+		if sdep, ok := e.submissionIdMap[d]; ok {
+			sdeps[i] = sdep
+		}
+	}
+	return sdeps
 }
 
 /////////////////////////////
