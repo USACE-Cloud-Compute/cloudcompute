@@ -9,6 +9,8 @@ import (
 
 type ResourceType string
 
+type ComputeProviderType int
+
 const (
 	ResourceTypeGpu             ResourceType = "GPU"
 	ResourceTypeVcpu            ResourceType = "VCPU"
@@ -18,6 +20,10 @@ const (
 	SUMMARY_COMPUTE  string = "COMPUTE"
 	SUMMARY_EVENT    string = "EVENT"
 	SUMMARY_MANIFEST string = "MANIFEST"
+
+	AWSBATCH    ComputeProviderType = 0
+	LOCALDOCKER ComputeProviderType = 1
+	KUBERNETES  ComputeProviderType = 2
 )
 
 // Input for terminating jobs submitted to a queue.
@@ -63,9 +69,14 @@ type ComputeProvider interface {
 	SubmitJob(job *Job) error
 	TerminateJobs(input TermminateJobInput) error
 	Status(jobQueue string, query JobsSummaryQuery) error
-	JobLog(submittedJobId string) ([]string, error)
+	JobLog(submittedJobId string, token *string) (JobLogOutput, error)
 	RegisterPlugin(plugin *Plugin) (PluginRegistrationOutput, error)
 	UnregisterPlugin(nameAndRevision string) error
+}
+
+type JobLogOutput struct {
+	Logs  []string
+	Token *string
 }
 
 // Overrides the container command or environment from the base values

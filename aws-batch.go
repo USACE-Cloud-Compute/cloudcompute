@@ -314,10 +314,10 @@ func (abp *AwsBatchProvider) Status(jobQueue string, query JobsSummaryQuery) err
 
 // @TODO this assumes the logs are rather short.
 // Need to update for logs that require pagenation in the AWS SDK
-func (abp *AwsBatchProvider) JobLog(submittedJobId string) ([]string, error) {
+func (abp *AwsBatchProvider) JobLog(submittedJobId string, token *string) (JobLogOutput, error) {
 	jobDesc, err := abp.describeBatchJobs([]string{submittedJobId})
 	if err != nil {
-		return nil, err
+		return JobLogOutput{}, err
 	}
 	cfg := cloudwatchlogs.GetLogEventsInput{
 		LogGroupName:  &awsLogGroup,
@@ -325,27 +325,31 @@ func (abp *AwsBatchProvider) JobLog(submittedJobId string) ([]string, error) {
 	}
 	logevents, err := abp.logs.GetLogEvents(ctx, &cfg)
 	if err != nil {
-		return nil, err
+		return JobLogOutput{}, err
 	}
 	out := make([]string, len(logevents.Events))
 	if logevents == nil {
-		return []string{"No logs"}, nil
+		return JobLogOutput{Logs: []string{"No logs"}}, nil
 	}
 	for i, v := range logevents.Events {
 		t := time.Unix(*v.Timestamp, 0)
 		out[i] = fmt.Sprintf("%v: %s", t, *v.Message)
 	}
-	return out, nil
+
+	return JobLogOutput{
+		Logs:  out,
+		Token: logevents.NextForwardToken,
+	}, nil
 }
 
-func (abp *AwsBatchProvider) listBatchJob(job *Job) (*batch.ListJobsOutput, error) {
-	input := batch.ListJobsInput{
-		JobQueue:  &job.JobQueue,
-		JobStatus: types.JobStatusSucceeded,
-	}
+// func (abp *AwsBatchProvider) listBatchJob(job *Job) (*batch.ListJobsOutput, error) {
+// 	input := batch.ListJobsInput{
+// 		JobQueue:  &job.JobQueue,
+// 		JobStatus: types.JobStatusSucceeded,
+// 	}
 
-	return abp.client.ListJobs(ctx, &input)
-}
+// 	return abp.client.ListJobs(ctx, &input)
+// }
 
 func (abp *AwsBatchProvider) describeBatchJobs(submittedJobIds []string) (*batch.DescribeJobsOutput, error) {
 	input := batch.DescribeJobsInput{
