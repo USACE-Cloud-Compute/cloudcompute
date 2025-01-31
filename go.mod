@@ -4,7 +4,7 @@ go 1.21
 
 toolchain go1.23.4
 
-replace github.com/usace/cc-go-sdk => /workspaces/cc-go-sdk
+//replace github.com/usace/cc-go-sdk => /workspaces/cc-go-sdk
 
 require (
 	github.com/aws/aws-sdk-go-v2 v1.27.2
@@ -12,7 +12,7 @@ require (
 	github.com/aws/aws-sdk-go-v2/service/batch v1.38.1
 	github.com/aws/aws-sdk-go-v2/service/cloudwatchlogs v1.35.7
 	github.com/google/uuid v1.6.0
-	github.com/usace/cc-go-sdk v0.0.0-20241202183721-28ce633c0e0d
+	github.com/usace/cc-go-sdk v0.0.0-20250128134343-3434061e91f0
 )
 
 require (
