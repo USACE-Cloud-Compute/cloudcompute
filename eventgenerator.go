@@ -9,6 +9,7 @@ import (
 	"log"
 	"reflect"
 	"strconv"
+	"sync"
 
 	"dario.cat/mergo"
 	"github.com/google/uuid"
@@ -27,6 +28,7 @@ type StreamingEventGenerator struct {
 	event   Event
 	scanner *bufio.Scanner
 	index   int
+	mu      sync.Mutex
 }
 
 func NewStreamingEventGeneratorForReader(event Event, reader io.Reader, delimiter string) (*StreamingEventGenerator, error) {
@@ -60,10 +62,14 @@ func NewStreamingEventGenerator(event Event, scanner *bufio.Scanner) (*Streaming
 }
 
 func (seg *StreamingEventGenerator) HasNextEvent() bool {
+	seg.mu.Lock()
+	defer seg.mu.Unlock()
 	return seg.scanner.Scan()
 }
 
 func (seg *StreamingEventGenerator) NextEvent() (Event, error) {
+	seg.mu.Lock()
+	defer seg.mu.Unlock()
 	event := seg.event
 	eventId := seg.scanner.Text()
 	if eventId == "" {
@@ -78,6 +84,7 @@ type ArrayEventGenerator struct {
 	event    Event
 	end      int64
 	position int64
+	mu       sync.Mutex
 }
 
 func NewArrayEventGenerator(event Event, start int64, end int64) (*ArrayEventGenerator, error) {
@@ -113,10 +120,14 @@ func NewArrayEventGenerator(event Event, start int64, end int64) (*ArrayEventGen
 }
 
 func (aeg *ArrayEventGenerator) HasNextEvent() bool {
+	aeg.mu.Lock()
+	defer aeg.mu.Unlock()
 	return aeg.position <= aeg.end
 }
 
 func (aeg *ArrayEventGenerator) NextEvent() (Event, error) {
+	aeg.mu.Lock()
+	defer aeg.mu.Unlock()
 	event := aeg.event
 	event.EventIdentifier = strconv.Itoa(int(aeg.position))
 	aeg.position++
@@ -128,6 +139,7 @@ func (aeg *ArrayEventGenerator) NextEvent() (Event, error) {
 type EventList struct {
 	currentEvent int
 	events       []Event
+	mu           sync.Mutex
 }
 
 // Instantiates a new EventList
@@ -141,6 +153,8 @@ func NewEventList(events []Event) *EventList {
 
 // Determines if all of the events have been enumerated
 func (el *EventList) HasNextEvent() bool {
+	el.mu.Lock()
+	defer el.mu.Unlock()
 	el.currentEvent++
 	return el.currentEvent < len(el.events)
 }
@@ -150,6 +164,8 @@ func (el *EventList) HasNextEvent() bool {
 // Retrieves the next event.  Attempts to perform a topological sort on the manifest slice before returning.
 // If sort fails it will log the issue and return the unsorted manifest slice
 func (el *EventList) NextEvent() (Event, error) {
+	el.mu.Lock()
+	defer el.mu.Unlock()
 	event := el.events[el.currentEvent]
 	if event.EventIdentifier == "" {
 		event.EventIdentifier = strconv.Itoa(el.currentEvent)

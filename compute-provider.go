@@ -30,7 +30,7 @@ const (
 // the list of jobs to terminate is determined by either
 // a StatusQuery with each job in the status query being terminated
 // or a list of VendorJobs for termination.
-type TermminateJobInput struct {
+type TerminateJobInput struct {
 	//Users reason for terminating the job
 	Reason string
 
@@ -43,7 +43,7 @@ type TermminateJobInput struct {
 	Query JobsSummaryQuery
 
 	//Optional. A list of VendorJobs to terminate
-	VendorJobs []VendorJob
+	VendorJobs VendorJobs
 
 	//Optional.  A function to process the results of each terminated job
 	TerminateJobFunction TerminateJobFunction
@@ -67,7 +67,7 @@ type TerminateJobFunction func(output TerminateJobOutput)
 // Interface for a compute provider.  Currently there is a single implementation for AwsBatch
 type ComputeProvider interface {
 	SubmitJob(job *Job) error
-	TerminateJobs(input TermminateJobInput) error
+	TerminateJobs(input TerminateJobInput) error
 	Status(jobQueue string, query JobsSummaryQuery) error
 	JobLog(submittedJobId string, token *string) (JobLogOutput, error)
 	RegisterPlugin(plugin *Plugin) (PluginRegistrationOutput, error)
@@ -83,13 +83,13 @@ type JobLogOutput struct {
 // provided in the job description
 type ContainerOverrides struct {
 	Command              []string
-	Environment          []KeyValuePair
+	Environment          KeyValuePairs
 	ResourceRequirements []ResourceRequirement
 }
 
 type ResourceRequirement struct {
-	Type  string `json:"resource_type" yaml:"resource_type"`
-	Value string `jsoon:"value" yaml:"value"`
+	Type  ResourceType `json:"resource_type" yaml:"resource_type"`
+	Value string       `jsoon:"value" yaml:"value"`
 }
 
 // This is a single "job" or unit of compute for a ComputeProvider
@@ -123,6 +123,17 @@ type Job struct {
 type VendorJob interface {
 	ID() string
 	Name() string
+}
+
+type VendorJobs []VendorJob
+
+func (vj VendorJobs) IncludesJob(id string) bool {
+	for _, v := range vj {
+		if v.ID() == id {
+			return true
+		}
+	}
+	return false
 }
 
 type SubmitJobResult struct {
@@ -246,4 +257,10 @@ func (kvps *KeyValuePairs) SetVal(key string, val string) {
 		Name:  key,
 		Value: val,
 	})
+}
+
+func (kvps *KeyValuePairs) Merge(newKvps *KeyValuePairs) {
+	for _, kvp := range *newKvps {
+		kvps.SetVal(kvp.Name, kvp.Value)
+	}
 }

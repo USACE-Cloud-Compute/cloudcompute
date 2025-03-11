@@ -1,0 +1,95 @@
+package cloudcompute
+
+import (
+	"log"
+
+	"github.com/google/uuid"
+	. "github.com/usace/cloudcompute"
+)
+
+type DockerComputeProvider struct {
+	manager  *DockerComputeManager
+	registry PluginRegistry
+	sm       *SecretsManager
+}
+
+type DockerComputeProviderConfig struct {
+	Concurrency     int
+	StartMonitor    int
+	MonitorFunction MonitorFunction
+	SecretsManager  *SecretsManager
+}
+
+func NewDockerComputeProvider(config DockerComputeProviderConfig) *DockerComputeProvider {
+	dcm := NewDockerComputeManager(DockerComputeManagerConfig{
+		Concurrency: config.Concurrency,
+	})
+	if config.StartMonitor > 0 {
+		dcm.StartMonitor(config.StartMonitor, config.MonitorFunction)
+	}
+	registry := NewInMemoryPluginRegistry()
+
+	var secretsManager *SecretsManager
+	if config.SecretsManager != nil {
+		secretsManager = config.SecretsManager
+	} else {
+		secretsManager = NewSecretManager("")
+	}
+	return &DockerComputeProvider{dcm, registry, secretsManager}
+}
+
+func (dcp *DockerComputeProvider) RegisterPlugin(plugin *Plugin) (PluginRegistrationOutput, error) {
+	output := PluginRegistrationOutput{}
+	err := dcp.registry.Register(plugin)
+	return output, err
+}
+
+func (dcp *DockerComputeProvider) SubmitJob(job *Job) error {
+	jobid := uuid.New().String()
+	plugin, err := dcp.registry.Get(job.JobDefinition)
+	if err != nil {
+		return err
+	}
+	job.SubmittedJob = &SubmitJobResult{
+		JobId:        &jobid,
+		ResourceName: nil,
+	}
+	dcp.manager.AddJob(&DockerJob{
+		Job:            job,
+		Plugin:         plugin,
+		Status:         Runnable,
+		SecretsManager: dcp.sm,
+	})
+	return nil
+}
+
+func (dcp *DockerComputeProvider) TerminateJobs(input TerminateJobInput) error {
+	dcp.manager.TerminateJobs(input)
+	return nil
+}
+
+func (dcp *DockerComputeProvider) Status(jobQueue string, query JobsSummaryQuery) error {
+
+	summaries := make([]JobSummary, len(dcp.manager.queue.Jobs()))
+
+	for i, job := range dcp.manager.queue.Jobs() {
+		summaries[i] = JobSummary{
+			JobId:   job.Job.ID.String(),
+			JobName: job.Job.JobName,
+			Status:  string(job.Status),
+		}
+
+	}
+	query.JobSummaryFunction(summaries)
+	return nil
+}
+
+func (dcp *DockerComputeProvider) JobLog(submittedJobId string, token *string) (JobLogOutput, error) {
+	log.Println("Not Implemented")
+	return JobLogOutput{}, nil
+}
+
+func (dcp *DockerComputeProvider) UnregisterPlugin(nameAndRevision string) error {
+	log.Println("Not Implemented")
+	return nil
+}

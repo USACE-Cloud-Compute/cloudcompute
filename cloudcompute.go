@@ -150,7 +150,7 @@ func (cc *CloudCompute) Status(query JobsSummaryQuery) error {
 
 // Cancels jobs submitted to compute environment
 func (cc *CloudCompute) Cancel(reason string) error {
-	input := TermminateJobInput{
+	input := TerminateJobInput{
 		Reason:   reason,
 		JobQueue: cc.JobQueue,
 		Query: JobsSummaryQuery{
@@ -327,9 +327,9 @@ type Plugin struct {
 	Description        string                   `json:"description" jsonschema:"title=Description"`
 	Command            []string                 `json:"command" jsonschema:"title=Command,description=The docker command and arguments to run"`
 	ComputeEnvironment PluginComputeEnvironment `json:"compute_environment" jsonschema:"title=Compute Environment,description=CPU and Memory runtime requirements"`
-	DefaultEnvironment []KeyValuePair           `json:"environment" jsonschema:"title=Default Environment Variables,description=The list of default environment variables"` //default values for the container environment
+	DefaultEnvironment KeyValuePairs            `json:"environment" jsonschema:"title=Default Environment Variables,description=The list of default environment variables"` //default values for the container environment
 	Volumes            []PluginComputeVolumes   `json:"volumes" jsonschema:"title=Volume Mounts,description=Storage volumes that need to be mounted to the plugin when it is run"`
-	Credentials        []KeyValuePair           `json:"credentials" jsonschema:"title=Credentials,description=Configures credentials/secrets from the service provider to be injected into the running container.  Note: DO NOT ENTER PASSWORDS OR ACTUAL CREDENTIALS"`
+	Credentials        KeyValuePairs            `json:"credentials" jsonschema:"title=Credentials,description=Configures credentials/secrets from the service provider to be injected into the running container.  Note: DO NOT ENTER PASSWORDS OR ACTUAL CREDENTIALS"`
 	Parameters         map[string]string        `json:"parameters" jsonschema:"title=Parameters"`
 	RetryAttemts       int32                    `json:"retry_attempts" jsonschema:"title=Retry Attempts"`
 	ExecutionTimeout   *int32                   `json:"execution_timeout" jsonschema:"title=Execution Timeout (sec)"`
@@ -387,4 +387,121 @@ type CcJobStore interface {
 type CcMessageQueue interface {
 	SendMessage(channel string, message []byte) error
 	Subscribe(channel string) (<-chan any, error) //amqp.Delivery
+}
+
+// Runs a Compute on the ComputeProvider
+// currently an event number of -1 represents an invalid event received from the event generator.
+// These events are skipped
+func (cc *CloudCompute) RunParralel(concurrency int) error {
+	//cc.submissionIdMap = make(map[uuid.UUID]string)
+
+	cr := NewConcurrentRunner(concurrency)
+
+	for cc.Events.HasNextEvent() {
+
+		event, eventErr := cc.Events.NextEvent()
+
+		cr.Run(func() {
+
+			event.submissionIdMap = make(map[uuid.UUID]string) //reduce the scope of the idmap to a single event
+
+			//the event generator returns an error if it cannot generate a valid event
+			//processing will continue when a valid event is generated.  An example would be
+			//generating events from csv that includes invalid values (emply starting or ending values)
+			if eventErr != nil {
+				log.Printf("error generating next event: %s\n", eventErr)
+				return
+			}
+
+			//go func(event Event) {
+			for _, manifest := range event.Manifests {
+				if len(manifest.Inputs.PayloadAttributes) > 0 || len(manifest.Inputs.DataSources) > 0 || len(manifest.Actions) > 0 {
+					err := manifest.WritePayload() //guarantees the payload id written to the manifest
+					if err != nil {
+						log.Printf("error writing payload for event %s: %s:\n", event.EventIdentifier, err)
+						return
+					}
+				}
+				env := append(manifest.Inputs.Environment,
+					KeyValuePair{CcPayloadId, manifest.payloadID.String()},
+					KeyValuePair{CcManifestId, manifest.ManifestID.String()},
+				)
+
+				if !env.HasKey(CcEventIdentifier) {
+					env = append(env, KeyValuePair{CcEventIdentifier, fmt.Sprint(event.EventIdentifier)})
+					env = append(env, KeyValuePair{CcEventNumber, fmt.Sprint(event.EventIdentifier)})
+				}
+
+				//the manifest substitution is will be removed in future versions.
+				//it is only supported now to ease the transition to payloadId vs manifestId
+				if !env.HasKey(CcManifestId) {
+					env = append(env, KeyValuePair{CcManifestId, manifest.ManifestID.String()})
+				}
+
+				env = append(env, KeyValuePair{CcPluginDefinition, manifest.PluginDefinition}) //@TODO do we need this?
+				jobID := uuid.New()
+				job := Job{
+					ID:            jobID,
+					EventID:       event.ID,
+					ManifestID:    manifest.ManifestID,
+					JobName:       fmt.Sprintf("%s_C_%s_E_%s_J_%s", CcProfile, cc.ID.String(), event.ID.String(), jobID),
+					JobQueue:      cc.JobQueue,
+					JobDefinition: manifest.PluginDefinition,
+					DependsOn:     event.mapDependencies(&manifest),
+					Parameters:    manifest.Inputs.Parameters,
+					Tags:          manifest.Tags,
+					RetryAttemts:  manifest.RetryAttemts,
+					JobTimeout:    manifest.JobTimeout,
+					ContainerOverrides: ContainerOverrides{
+						Environment:          env,
+						Command:              manifest.Command,
+						ResourceRequirements: manifest.ResourceRequirements,
+					},
+				}
+				err := cc.ComputeProvider.SubmitJob(&job)
+				if err != nil {
+					log.Printf("error submitting job for event %s: %s:\n", event.EventIdentifier, err)
+					return //@TODO what happens if a set submit ok then one fails?  How do we cancel? See notes below
+				}
+				if cc.JobStore != nil {
+					err := cc.JobStore.SaveJob(cc.ID, manifest.payloadID, event.EventIdentifier, &job)
+					if err != nil {
+						log.Printf("error saving job for event %s: %s:\n", event.EventIdentifier, err)
+						return //@TODO should we terminate everything if we cannot save to the compute store?
+					}
+				}
+				event.submissionIdMap[manifest.ManifestID] = *job.SubmittedJob.JobId
+			}
+		})
+	} //end of event loop
+	cr.Wait()
+	return nil
+}
+
+type ConcurrentRunner struct {
+	limit     int
+	semaphore chan struct{}
+}
+
+func NewConcurrentRunner(limit int) *ConcurrentRunner {
+	return &ConcurrentRunner{
+		limit:     limit,
+		semaphore: make(chan struct{}, limit),
+	}
+}
+
+func (cr *ConcurrentRunner) Run(cf func()) {
+	cr.semaphore <- struct{}{}
+	go func() {
+		defer func() {
+			<-cr.semaphore
+		}()
+		cf()
+	}()
+}
+
+func (cr *ConcurrentRunner) Wait() {
+	for i := 0; i < cap(cr.semaphore); i++ {
+		cr.semaphore <- struct{}{}
+	}
 }
