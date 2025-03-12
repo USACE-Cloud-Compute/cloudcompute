@@ -257,7 +257,7 @@ func getHostConfig(djob *DockerJob) (*container.HostConfig, error) {
 	}
 
 	var mounts []mount.Mount
-	if djob.Plugin.MountPoints != nil && len(djob.Plugin.MountPoints) > 0 {
+	if len(djob.Plugin.MountPoints) > 0 {
 		mounts = make([]mount.Mount, len(djob.Plugin.MountPoints))
 		for i, m := range djob.Plugin.MountPoints {
 			mounts[i] = mount.Mount{
