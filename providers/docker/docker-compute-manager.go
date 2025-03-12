@@ -49,10 +49,12 @@ type DockerComputeManager struct {
 }
 
 func NewDockerComputeManager(config DockerComputeManagerConfig) *DockerComputeManager {
-	//wg := sync.WaitGroup{}
-	//wg.Add(1)
+
+	if config.Concurrency == 0 {
+		config.Concurrency = 1
+	}
+
 	dcm := DockerComputeManager{
-		//wg:          &wg,
 		queue:       NewInMemoryJobQueue(),
 		concurrency: config.Concurrency,
 		queueEvents: make(chan string),
@@ -75,7 +77,7 @@ func (dcm *DockerComputeManager) runner() {
 		select {
 		case event := <-dcm.queueEvents:
 			fmt.Println(event)
-			runnableJob := dcm.queue.Get(Runnable)
+			runnableJob := dcm.queue.GetNextRunnable()
 			if runnableJob == nil {
 				continue //@TODO not really sure this could actually happen...but just in case
 			}
@@ -85,7 +87,7 @@ func (dcm *DockerComputeManager) runner() {
 					<-dcm.limiter
 					dcm.queueEvents <- fmt.Sprintf("FINISHED JOB: %s", dockerJob.Job.ManifestID)
 				}()
-				dockerJob.Status = Starting
+				//dockerJob.Status = Starting
 				runner, err := NewRunner(dockerJob)
 				if err != nil {
 					dockerJob.Status = Failed
@@ -126,9 +128,9 @@ func (dcm *DockerComputeManager) StartMonitor(interval int, monitorFunc MonitorF
 	}()
 }
 
-func (dcm *DockerComputeManager) Wait() {
-	dcm.wg.Wait()
-}
+// func (dcm *DockerComputeManager) Wait() {
+// 	dcm.wg.Wait()
+// }
 
 func (dcm *DockerComputeManager) TerminateJobs(input TerminateJobInput) {
 	for _, job := range dcm.queue.Jobs() {

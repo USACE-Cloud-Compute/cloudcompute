@@ -335,6 +335,7 @@ type Plugin struct {
 	ExecutionTimeout   *int32                   `json:"execution_timeout" jsonschema:"title=Execution Timeout (sec)"`
 	Privileged         bool                     `json:"privileged" jsonschema:"title=Requires Privileged Execution"` //assign container privileged execution.  for example to mount linux devices
 	LinuxParameters    LinuxParameters          `json:"linux_parameters" jsonschema:"title=Linux Parameters"`
+	MountPoints        []MountPoint             `json:"mountpoints" jsonschema:"title=MountPoints"`
 }
 
 type LinuxParameters struct {
@@ -344,6 +345,12 @@ type LinuxParameters struct {
 type LinuxDevice struct {
 	HostPath      *string `json:"host_path" jsonschema:"title=Host Path"`
 	ContainerPath *string `json:"container_path" jsonschema:"title=Container Path"`
+}
+
+type MountPoint struct {
+	ContainerPath string
+	ReadOnly      bool
+	SourceVolume  string
 }
 
 type PluginComputeEnvironment struct {

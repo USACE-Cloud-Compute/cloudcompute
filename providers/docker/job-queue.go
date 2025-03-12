@@ -9,8 +9,11 @@ import (
 type JobQueue interface {
 	Add(job *DockerJob)
 
-	//Gets the first job matching the status
-	Get(status JobStatus) *DockerJob
+	// //Gets the first job matching the status
+	// Get(status JobStatus) *DockerJob
+
+	//Gets the next runable job and sets the status to Starting
+	GetNextRunnable() *DockerJob
 
 	//Gets all jobs matching the set of statuses
 	//Calling with no status argument will return all jobs
@@ -47,14 +50,26 @@ func (jq *InMemoryJobQueue) Jobs(statuses ...JobStatus) []*DockerJob {
 	return jobs
 }
 
-func (jq *InMemoryJobQueue) Get(status JobStatus) *DockerJob {
+func (jq *InMemoryJobQueue) GetNextRunnable() *DockerJob {
+	jq.Lock()
+	defer jq.Unlock()
 	for _, job := range jq.queue {
-		if status == job.Status {
+		if job.Status == Runnable {
+			job.Status = Starting
 			return job
 		}
 	}
 	return nil
 }
+
+// func (jq *InMemoryJobQueue) Get(status JobStatus) *DockerJob {
+// 	for _, job := range jq.queue {
+// 		if status == job.Status {
+// 			return job
+// 		}
+// 	}
+// 	return nil
+// }
 
 func (jq *InMemoryJobQueue) GetJob(id uuid.UUID) *DockerJob {
 	for _, job := range jq.queue {

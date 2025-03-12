@@ -11,6 +11,7 @@ import (
 
 	"github.com/docker/docker/api/types/container"
 	"github.com/docker/docker/api/types/image"
+	"github.com/docker/docker/api/types/mount"
 	"github.com/docker/docker/client"
 	. "github.com/usace/cloudcompute"
 )
@@ -255,11 +256,23 @@ func getHostConfig(djob *DockerJob) (*container.HostConfig, error) {
 		return nil, fmt.Errorf("invalid cpu value: %s", err)
 	}
 
+	var mounts []mount.Mount
+	if djob.Plugin.MountPoints != nil && len(djob.Plugin.MountPoints) > 0 {
+		mounts = make([]mount.Mount, len(djob.Plugin.MountPoints))
+		for i, m := range djob.Plugin.MountPoints {
+			mounts[i] = mount.Mount{
+				Type:   mount.TypeBind, //@TODO need to support other mount types
+				Source: m.SourceVolume,
+				Target: m.ContainerPath,
+			}
+		}
+	}
 	config := container.HostConfig{
 		Resources: container.Resources{
 			Memory:   int64(memory) * mbToByte,
 			NanoCPUs: int64(cpu) * nanocpu,
 		},
+		Mounts: mounts,
 	}
 	return &config, nil
 }

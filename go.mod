@@ -1,8 +1,6 @@
 module github.com/usace/cloudcompute
 
-go 1.23.0
-
-toolchain go1.23.4
+go 1.23
 
 //replace github.com/usace/cc-go-sdk => /workspaces/cc-go-sdk
 
