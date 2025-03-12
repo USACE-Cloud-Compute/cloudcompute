@@ -14,10 +14,18 @@ type DockerComputeProvider struct {
 }
 
 type DockerComputeProviderConfig struct {
-	Concurrency     int
-	StartMonitor    int
+	//number of concurrent containers to allow on the host
+	Concurrency int
+
+	//starts a monitor job which provides job summary counts similar to the AWS Batch dashboard.
+	//If the value provided is greater than 0, the monitor will start using the value as a monitoring interval in seconds
+	StartMonitor int
+
+	//optional monitor function.  The default monitor will print the status counts to StdOut
 	MonitorFunction MonitorFunction
-	SecretsManager  *SecretsManager
+
+	//optional in memory secrets manager if a secrets mock is necessary
+	SecretsManager *SecretsManager
 }
 
 func NewDockerComputeProvider(config DockerComputeProviderConfig) *DockerComputeProvider {
