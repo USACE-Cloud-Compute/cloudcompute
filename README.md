@@ -7,6 +7,8 @@ Container Compute is a framework designed for large-scale computing, drawing sig
  - Job Queues – Manage the prioritization and scheduling of jobs across compute environments.
  - Jobs – The actual units of work submitted to the system for execution.
 
+## Background
+
 
 ## Core Principles
 Container Compute follows a set of key definitions and principles:
@@ -54,19 +56,25 @@ Container Compute currently has two implementations:
  - Plugins can not contain Personably Identifiable Information (PII), Personal Health Information (PHI), or Controlled Unclassified Information (CUI)
  - Container Compute Events (DAGS) can only be constructed from approved plugins
 
- ## Approval and Resource Allocation Guidelines
+## Approval and Resource Allocation Guidelines
  
 
+## License
+MIT License
 
-## Software Development Kit
+
+
+## Software Development Kits
 The software development kit (SDK) provides the essential data structures and a handful of utility services to provide the necessary consistency needed for container compute.
 
 GO : https://github.com/USACE/cc-go-sdk
 
-Jave : https://github.com/USACE/cc-java-sdk
+Java : https://github.com/USACE/cc-java-sdk
 
 Python : https://github.com/USACE/cc-python-sdk
 
 DotNet : https://github.com/USACE/cc-dotnet-sdk
+
+
 
 
