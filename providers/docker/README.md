@@ -1,5 +1,5 @@
-## Container Compute Docker Provider
-The container compute docker provider is intended to support local development of plugins.  
+## Cloud Compute Docker Provider
+The cloud compute docker provider is intended to support local development of plugins.  
 
 ```golang
 //create a provider with a job execution concurrency of 4:

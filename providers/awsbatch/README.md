@@ -1,5 +1,5 @@
-## Container Compute AWS Batch Compute Provider
-The container compute aws batch provider is for production compute in AWS
+## Cloud Compute AWS Batch Compute Provider
+The cloud compute aws batch provider is for production compute in AWS
 
 ```golang
 //create a provider 

@@ -1,4 +1,4 @@
-One way to execute plugins in the container compute environment is to write a manifestor using golang and the containercompute library.  As long as you can use golang, this is a very simple way to run plugins.
+One way to execute plugins in the cloud compute environment is to write a manifestor using golang and the containercompute library.  As long as you can use golang, this is a very simple way to run plugins.
 
 Our first example will be a sample that runs the docker hello world using a local docker compute provider:
 

@@ -16,8 +16,6 @@ import (
 	. "github.com/usace/cc-go-sdk"
 )
 
-//@TODO EventGenerators must be "thread safe"
-
 // EventGenerators provide an iterator type interface to work with sets of events for a Compute.
 type EventGenerator interface {
 	HasNextEvent() bool

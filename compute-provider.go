@@ -64,7 +64,7 @@ type TerminateJobOutput struct {
 // function to process the results of each job termination
 type TerminateJobFunction func(output TerminateJobOutput)
 
-// Interface for a compute provider.  Currently there is a single implementation for AwsBatch
+// Interface for a compute provider.
 type ComputeProvider interface {
 	SubmitJob(job *Job) error
 	TerminateJobs(input TerminateJobInput) error
@@ -88,8 +88,8 @@ type ContainerOverrides struct {
 }
 
 type ResourceRequirement struct {
-	Type  ResourceType `json:"resource_type" yaml:"resource_type"`
-	Value string       `jsoon:"value" yaml:"value"`
+	Type  ResourceType `json:"resource_type"`
+	Value string       `json:"value"`
 }
 
 // This is a single "job" or unit of compute for a ComputeProvider
@@ -110,16 +110,8 @@ type Job struct {
 	SubmittedJob       *SubmitJobResult //reference to the job information from the compute environment
 }
 
-// JobDependency is a graph dependency relationship.
-// When created for a manifest, the JobId value should be the manifestId. When a Compute
-// is run, Compute will map manifestIds to submitted JobIds as they are submitted and
-// handle the dependency mapping for the compute environment
-// type JobDependency struct {
-// 	//Cloud Compute Job Identifier
-// 	//should be ManifestID when being added as a dependency in a Manifest
-// 	JobId uuid.UUID
-// }
-
+// Vendor job data used for terminating jobs on the vendor's compute environment
+// @TODO, why can't this be replaced by SubmitJobResult?
 type VendorJob interface {
 	ID() string
 	Name() string
@@ -136,6 +128,7 @@ func (vj VendorJobs) IncludesJob(id string) bool {
 	return false
 }
 
+// Vendor job information
 type SubmitJobResult struct {
 
 	//Vendor ID

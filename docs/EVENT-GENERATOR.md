@@ -1,5 +1,5 @@
 ## Event Generators
-In Container Compute, an event represents a single execution through a Directed Acyclic Graph (DAG). Event Generators streamline the creation of large numbers of events for stochastic simulations, making the process more efficient.
+In Cloud Compute, an event represents a single execution through a Directed Acyclic Graph (DAG). Event Generators streamline the creation of large numbers of events for stochastic simulations, making the process more efficient.
 
 The event generator interface contains two methods:
 ```golang
@@ -9,10 +9,10 @@ type EventGenerator interface {
 }
 ```
 
-Currently Container Compute has three types of Event Generators:
+Currently Cloud Compute has three types of Event Generators:
 
 ### List Event Generator
-A list event generator is an event generator that contains a list of events that will be run sequentually.  Each event in a list event generator is independant of other evednts, therefore the dags in each event can be different.
+A list event generator is an event generator that contains a list of events that will be submitted to the job queues sequentually.  Each event in a list event generator is independant of other events, therefore the dags in each event can be different.
 
 ```golang
 eventGenerator := NewEventList([]Event{

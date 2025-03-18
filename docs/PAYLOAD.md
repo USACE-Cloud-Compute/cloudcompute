@@ -1,4 +1,4 @@
-Plugins can optionally use a payload.  A payload is a file created by container compute that describes the variable parameters, inputs, outputs, and actions a compute plugin can perform. 
+Plugins can optionally use a payload.  A payload is a file created by cloud compute that describes the variable parameters, inputs, outputs, and actions a compute plugin can perform. 
 
 ![alt text](plugin-life-cycle.png "Plugin Life Cycle")
 
@@ -30,8 +30,11 @@ Stores have the following attributes:
 Outputs are identical to inputs but describe the data sources for exporting data out of the plugin.  the object format is identical to input.
 
 ## Actions
-Actions are an array of commands that a plugin will perform.  these are analagous to command line switches and allow a single plugin to perform multiple tasks.  for example a RAS plugin might have an action for running a geometry preprocessor, a second action for running the model, and a third action for exporting gridded output.  The array of actions will be run in sequence and there is no limit on the number of actions that can be included in a payload. Each action in the array can include a private set of input/output options.  This includes attributes, stores, inputs, and outputs
+Actions are an array of commands that a plugin will perform.  these are analagous to command line switches and allow a single plugin to perform multiple tasks.  for example a RAS plugin might have an action for running a geometry preprocessor, a second action for running the model, and a third action for exporting gridded output.  The array of actions will be run in sequence and there is no limit on the number of actions that can be included in a payload. Each action in the array can include a private set of input/output options.  This includes attributes, stores, inputs, and outputs.  
 
+Actions have two unique attributes
+ - type: This is the type of action and is what the plugin uses to determine the internal action to run
+ - description: This is the description of the action being run
 
 sample payload
 ```json
