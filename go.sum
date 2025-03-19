@@ -129,6 +129,10 @@ github.com/stretchr/testify v1.10.0 h1:Xv5erBjTwe/5IxqUQTdXv5kgmIvbHo3QQyRwhJsOf
 github.com/stretchr/testify v1.10.0/go.mod h1:r2ic/lqez/lEtzL7wO/rwa5dbSLXVDPFyf8C91i36aY=
 github.com/usace/cc-go-sdk v0.0.0-20250128134343-3434061e91f0 h1:Rq0NMSwfPKqs40Sgl2ar27PgqmVSIVajRHw+C06oJDE=
 github.com/usace/cc-go-sdk v0.0.0-20250128134343-3434061e91f0/go.mod h1:IeVbrypVJTY02aezfIykwjrOVa6+QWfgBF0tYLSl7SU=
+github.com/usace/cc-go-sdk v0.0.0-20250318195040-47c25bc3dcba h1:AUOiWDOCpMJROF3dInpz4HUlhaVVIRDXXBYsZZMkJXM=
+github.com/usace/cc-go-sdk v0.0.0-20250318195040-47c25bc3dcba/go.mod h1:IeVbrypVJTY02aezfIykwjrOVa6+QWfgBF0tYLSl7SU=
+github.com/usace/cc-go-sdk v0.0.0-20250318195511-319b65ed5ca4 h1:ugfat8XN6phOqqadWozWlbHHL/6uBIVEQnV/0v0XQmY=
+github.com/usace/cc-go-sdk v0.0.0-20250318195511-319b65ed5ca4/go.mod h1:IeVbrypVJTY02aezfIykwjrOVa6+QWfgBF0tYLSl7SU=
 github.com/usace/filesapi v0.0.0-20240603195053-3fa10ec2cb22 h1:pI5oFl4PD9dwZWh12l09A/QsxSodWmxItzT3+44MLpo=
 github.com/usace/filesapi v0.0.0-20240603195053-3fa10ec2cb22/go.mod h1:n93SV2TkqTZQvaxEmraFCSMUDTbPVyc2uc8q+UTp9Q8=
 github.com/wk8/go-ordered-map/v2 v2.1.8 h1:5h/BUHu93oj4gIdvHHHGsScSTMijfx5PeYkE/fJgbpc=

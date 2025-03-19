@@ -1,6 +1,6 @@
 module github.com/usace/cloudcompute
 
-go 1.23
+go 1.23.0
 
 //replace github.com/usace/cc-go-sdk => /workspaces/cc-go-sdk
 
@@ -12,7 +12,7 @@ require (
 	github.com/aws/aws-sdk-go-v2/service/cloudwatchlogs v1.35.7
 	github.com/docker/docker v28.0.1+incompatible
 	github.com/google/uuid v1.6.0
-	github.com/usace/cc-go-sdk v0.0.0-20250128134343-3434061e91f0
+	github.com/usace/cc-go-sdk v0.0.0-20250318195511-319b65ed5ca4
 )
 
 require (
