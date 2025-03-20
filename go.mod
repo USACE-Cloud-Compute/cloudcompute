@@ -12,7 +12,7 @@ require (
 	github.com/aws/aws-sdk-go-v2/service/cloudwatchlogs v1.35.7
 	github.com/docker/docker v28.0.1+incompatible
 	github.com/google/uuid v1.6.0
-	github.com/usace/cc-go-sdk v0.0.0-20250319181406-3175b2561510
+	github.com/usace/cc-go-sdk v0.0.0-20250320132651-dd5239e5e7ac
 )
 
 require (
@@ -33,7 +33,7 @@ require (
 	github.com/aws/aws-sdk-go-v2/service/sso v1.20.11 // indirect
 	github.com/aws/aws-sdk-go-v2/service/ssooidc v1.24.5 // indirect
 	github.com/aws/aws-sdk-go-v2/service/sts v1.28.12 // indirect
-	github.com/aws/smithy-go v1.22.2 // indirect
+	github.com/aws/smithy-go v1.22.3 // indirect
 	github.com/bahlo/generic-list-go v0.2.0 // indirect
 	github.com/buger/jsonparser v1.1.1 // indirect
 	github.com/containerd/log v0.1.0 // indirect
@@ -55,7 +55,7 @@ require (
 	github.com/opencontainers/image-spec v1.1.1 // indirect
 	github.com/pkg/errors v0.9.1 // indirect
 	github.com/spf13/cast v1.6.0 // indirect
-	github.com/usace/filesapi v0.0.0-20250319153150-ee631dd02f21 // indirect
+	github.com/usace/filesapi v0.0.0-20250320132414-61c781325b9a // indirect
 	github.com/wk8/go-ordered-map/v2 v2.1.8 // indirect
 	go.opentelemetry.io/auto/sdk v1.1.0 // indirect
 	go.opentelemetry.io/contrib/instrumentation/net/http/otelhttp v0.60.0 // indirect
