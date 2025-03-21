@@ -10,7 +10,7 @@ import (
 type DockerComputeProvider struct {
 	manager  *DockerComputeManager
 	registry PluginRegistry
-	sm       *SecretsManager
+	sm       SecretsManager
 }
 
 type DockerComputeProviderConfig struct {
@@ -25,7 +25,7 @@ type DockerComputeProviderConfig struct {
 	MonitorFunction MonitorFunction
 
 	//optional in memory secrets manager if a secrets mock is necessary
-	SecretsManager *SecretsManager
+	SecretsManager SecretsManager
 }
 
 func NewDockerComputeProvider(config DockerComputeProviderConfig) *DockerComputeProvider {
@@ -37,11 +37,11 @@ func NewDockerComputeProvider(config DockerComputeProviderConfig) *DockerCompute
 	}
 	registry := NewInMemoryPluginRegistry()
 
-	var secretsManager *SecretsManager
+	var secretsManager SecretsManager
 	if config.SecretsManager != nil {
 		secretsManager = config.SecretsManager
 	} else {
-		secretsManager = NewSecretManager("")
+		secretsManager = NewInMemorySecretsManager("")
 	}
 	return &DockerComputeProvider{dcm, registry, secretsManager}
 }

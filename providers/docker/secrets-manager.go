@@ -1,24 +1,42 @@
 package cloudcompute
 
 import (
+	"os"
+
 	. "github.com/usace/cloudcompute"
 )
 
+type SecretsManager interface {
+	AddSecret(key string, val string)
+	GetSecret(key string) string
+}
+
 // create a new in memory secret manager
 // key is reserved for adding an encryption key should it be added later
-func NewSecretManager(key string) *SecretsManager {
-	return &SecretsManager{key: []byte(key)}
+func NewInMemorySecretsManager(key string) SecretsManager {
+	return &InMemorySecretsManager{encryptionKey: []byte(key)}
 }
 
-type SecretsManager struct {
-	key     []byte
-	secrets KeyValuePairs
+type InMemorySecretsManager struct {
+	encryptionKey []byte
+	secrets       KeyValuePairs
 }
 
-func (sm *SecretsManager) AddSecret(key string, val string) {
+func (sm *InMemorySecretsManager) AddSecret(key string, val string) {
 	sm.secrets.SetVal(key, val)
 }
 
-func (sm *SecretsManager) GetSecret(key string) string {
+func (sm *InMemorySecretsManager) GetSecret(key string) string {
 	return sm.secrets.GetVal(key)
+}
+
+// env sxecret manager
+type EnvironmentSecretManager struct{}
+
+func (sm *EnvironmentSecretManager) AddSecret(key string, val string) {
+	os.Setenv(key, val) //@TODO this fails silently..
+}
+
+func (sm *EnvironmentSecretManager) GetSecret(key string) string {
+	return os.Getenv(key)
 }

@@ -28,7 +28,7 @@ type DockerJob struct {
 	Status         JobStatus
 	Log            string
 	runner         *DockerJobRunner
-	SecretsManager *SecretsManager
+	SecretsManager SecretsManager
 	//JobDefinition *Plugin //@TODO need to add????
 
 }
