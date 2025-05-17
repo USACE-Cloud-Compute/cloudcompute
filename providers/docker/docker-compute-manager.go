@@ -4,7 +4,6 @@ import (
 	"fmt"
 	"log"
 	"strings"
-	"sync"
 	"time"
 
 	. "github.com/usace/cloudcompute"
@@ -18,7 +17,7 @@ const (
 	Runnable  JobStatus = "RUNNABLE"
 	Starting  JobStatus = "STARTING"
 	Running   JobStatus = "RUNNING"
-	Suceeded  JobStatus = "SUCCEEDED"
+	Succeeded JobStatus = "SUCCEEDED"
 	Failed    JobStatus = "FAILED"
 )
 
@@ -40,7 +39,7 @@ type DockerComputeManagerConfig struct {
 }
 
 type DockerComputeManager struct {
-	wg          *sync.WaitGroup
+	//wg          *sync.WaitGroup
 	concurrency int
 	queue       JobQueue
 	queueEvents chan string
@@ -76,7 +75,9 @@ func (dcm *DockerComputeManager) runner() {
 	for {
 		select {
 		case event := <-dcm.queueEvents:
-			fmt.Println(event)
+			log.Println(event)
+			pendingJobsThatCanStart := dcm.queue.UpdateJobs()
+
 			runnableJob := dcm.queue.GetNextRunnable()
 			if runnableJob == nil {
 				continue //@TODO not really sure this could actually happen...but just in case
@@ -102,8 +103,14 @@ func (dcm *DockerComputeManager) runner() {
 
 			}(runnableJob)
 
+			for _, id := range pendingJobsThatCanStart {
+				go func() {
+					dcm.queueEvents <- fmt.Sprintf("PENDING JOB: %s CAN START", id)
+				}()
+			}
+
 		case <-dcm.control:
-			dcm.wg.Done()
+			//dcm.wg.Done()
 			log.Println("Stopping Runner")
 			return
 		}
@@ -128,20 +135,10 @@ func (dcm *DockerComputeManager) StartMonitor(interval int, monitorFunc MonitorF
 	}()
 }
 
-// func (dcm *DockerComputeManager) Wait() {
-// 	dcm.wg.Wait()
-// }
-
 func (dcm *DockerComputeManager) TerminateJobs(input TerminateJobInput) {
 	for _, job := range dcm.queue.Jobs() {
 		if strings.Contains(job.Job.JobName, input.Query.QueryValue.Compute) {
 			job.runner.Terminate()
 		}
 	}
-
-	// for _, job := range dcm.queue.Jobs() {
-	// 	if input.VendorJobs.IncludesJob(job.Job.ID.String()) {
-	// 		job.runner.Terminate()
-	// 	}
-	// }
 }

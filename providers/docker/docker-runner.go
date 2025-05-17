@@ -13,6 +13,7 @@ import (
 	"github.com/docker/docker/api/types/image"
 	"github.com/docker/docker/api/types/mount"
 	"github.com/docker/docker/client"
+	"github.com/google/uuid"
 	. "github.com/usace/cloudcompute"
 )
 
@@ -100,8 +101,8 @@ func (dr *DockerJobRunner) Run() error {
 	dr.containerId = resp.ID
 
 	/////
-	log.Println(resp)
-	log.Printf("Running Job: %s\n", dr.djob.Job.ManifestID)
+	//log.Println(resp)
+	log.Printf("RUNNING JOB: %s\n", dr.djob.Job.ManifestID)
 	/////
 
 	if err := dr.client.ContainerStart(ctx, resp.ID, container.StartOptions{}); err != nil {
@@ -145,7 +146,8 @@ func (dr *DockerJobRunner) Run() error {
 			dr.djob.Status = Failed
 			return err
 		}
-		os.Stdout.Write(buffer[:n])
+		//os.Stdout.Write(buffer[:n])
+		writeToStdOut(buffer[:n], dr.djob.Job.ManifestID)
 	}
 
 	//read anything remaining
@@ -155,15 +157,17 @@ func (dr *DockerJobRunner) Run() error {
 		return err
 	}
 
-	os.Stdout.Write(buffer[:n])
+	//os.Stdout.Write(buffer[:n])
+	writeToStdOut(buffer[:n], dr.djob.Job.ManifestID)
 	if !dr.terminated && dr.djob.Status != Failed {
-		dr.djob.Status = Suceeded
+		dr.djob.Status = Succeeded
 	}
 	return nil
 }
 
 func (dr *DockerJobRunner) imagePull() {
 	if !dr.isLocalImage() {
+		log.Printf("Image: %s not found on local system.  Pulling from the remote address.\n", dr.djob.Plugin.ImageAndTag)
 		reader, err := dr.client.ImagePull(ctx, dr.djob.Plugin.ImageAndTag, image.PullOptions{})
 		if err != nil {
 			panic(err)
@@ -223,6 +227,10 @@ func getContainerConfig(djob *DockerJob) (*container.Config, error) {
 		Env:   KvpToEnv(env),
 	}
 
+	// for _, kvp := range env {
+	// 	fmt.Printf("%s=%s\n", kvp.Name, kvp.Value)
+	// }
+
 	if len(djob.Job.ContainerOverrides.Command) == 0 {
 		config.Cmd = djob.Plugin.Command
 	} else {
@@ -275,4 +283,23 @@ func getHostConfig(djob *DockerJob) (*container.HostConfig, error) {
 		Mounts: mounts,
 	}
 	return &config, nil
+}
+
+func writeToStdOut(buffer []byte, manifestId uuid.UUID) {
+	line := []byte{}
+	for _, b := range buffer {
+		if b == '\n' {
+			pl := fmt.Sprintf("JOB: %s: %s\n", manifestId, line)
+			os.Stdout.WriteString(pl)
+			line = line[:0]
+		} else {
+			line = append(line, b)
+		}
+	}
+
+	//flush any remaining text
+	if len(line) > 0 {
+		pl := fmt.Sprintf("JOB: %s: %s\n", manifestId, line)
+		os.Stdout.WriteString(pl)
+	}
 }

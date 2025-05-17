@@ -21,6 +21,8 @@ type JobQueue interface {
 
 	//Get a job by ID
 	GetJob(jobId uuid.UUID) *DockerJob
+
+	UpdateJobs() []uuid.UUID
 }
 
 func NewInMemoryJobQueue() JobQueue {
@@ -50,26 +52,43 @@ func (jq *InMemoryJobQueue) Jobs(statuses ...JobStatus) []*DockerJob {
 	return jobs
 }
 
+func (jq *InMemoryJobQueue) UpdateJobs() []uuid.UUID {
+	pendingThatCanStart := []uuid.UUID{}
+	for _, job := range jq.queue {
+		depCount := len(job.Job.DependsOn)
+		if depCount == 0 && job.Status == Submitted {
+			job.Status = Runnable
+		}
+		if depCount > 0 {
+			switch job.Status {
+			case Submitted:
+				job.Status = Pending
+			case Pending:
+				deps := job.Job.DependsOn
+				depJobs := jq.getJobDeps(deps)
+				if depJobs.hasUnfinishedDependencies() {
+					job.Status = Pending
+				} else {
+					job.Status = Runnable
+					pendingThatCanStart = append(pendingThatCanStart, job.Job.ManifestID)
+				}
+			}
+		}
+	}
+	return pendingThatCanStart
+}
+
 func (jq *InMemoryJobQueue) GetNextRunnable() *DockerJob {
 	jq.Lock()
 	defer jq.Unlock()
-	for _, job := range jq.queue {
+	for i, job := range jq.queue {
 		if job.Status == Runnable {
-			job.Status = Starting
+			jq.queue[i].Status = Starting
 			return job
 		}
 	}
 	return nil
 }
-
-// func (jq *InMemoryJobQueue) Get(status JobStatus) *DockerJob {
-// 	for _, job := range jq.queue {
-// 		if status == job.Status {
-// 			return job
-// 		}
-// 	}
-// 	return nil
-// }
 
 func (jq *InMemoryJobQueue) GetJob(id uuid.UUID) *DockerJob {
 	for _, job := range jq.queue {
@@ -80,10 +99,47 @@ func (jq *InMemoryJobQueue) GetJob(id uuid.UUID) *DockerJob {
 	return nil
 }
 
+func (jq *InMemoryJobQueue) getJobs(jobids []string) []*DockerJob {
+	jobs := make([]*DockerJob, len(jobids))
+	for i, ids := range jobids {
+		if job, ok := jq.queue[ids]; ok {
+			jobs[i] = job
+		}
+	}
+	return jobs
+}
+
+func (jq *InMemoryJobQueue) getJobDeps(jobids []string) JobDeps {
+	jobs := make([]*DockerJob, len(jobids))
+	for i, ids := range jobids {
+		for _, job := range jq.queue {
+			if *job.Job.SubmittedJob.JobId == ids {
+				jobs[i] = job
+			}
+		}
+	}
+	return JobDeps(jobs)
+}
+
 func containsStatus(statusList []JobStatus, status JobStatus) bool {
 	for _, v := range statusList {
 		if v == status {
 			return true
+		}
+	}
+	return false
+}
+
+var unfinishedDepStatusList []JobStatus = []JobStatus{Submitted, Pending, Runnable, Starting, Running}
+
+type JobDeps []*DockerJob
+
+func (jds JobDeps) hasUnfinishedDependencies() bool {
+	for _, jd := range jds {
+		for _, status := range unfinishedDepStatusList {
+			if status == jd.Status {
+				return true
+			}
 		}
 	}
 	return false

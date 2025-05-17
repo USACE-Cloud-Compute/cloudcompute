@@ -30,13 +30,22 @@ func (sm *InMemorySecretsManager) GetSecret(key string) string {
 	return sm.secrets.GetVal(key)
 }
 
-// env sxecret manager
-type EnvironmentSecretManager struct{}
+// env seccret manager
+
+func NewEnvironmentSecretsManager() SecretsManager {
+	return &EnvironmentSecretManager{
+		secrets: make(map[string]string),
+	}
+}
+
+type EnvironmentSecretManager struct {
+	secrets map[string]string
+}
 
 func (sm *EnvironmentSecretManager) AddSecret(key string, val string) {
-	os.Setenv(key, val) //@TODO this fails silently..
+	sm.secrets[key] = val
 }
 
 func (sm *EnvironmentSecretManager) GetSecret(key string) string {
-	return os.Getenv(key)
+	return os.Getenv(sm.secrets[key])
 }

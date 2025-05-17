@@ -13,6 +13,7 @@ type DockerComputeProvider struct {
 	sm       SecretsManager
 }
 
+// DockerComputeProviderConfig holds the configuration for DockerComputeProvider.
 type DockerComputeProviderConfig struct {
 	//number of concurrent containers to allow on the host
 	Concurrency int
@@ -28,6 +29,7 @@ type DockerComputeProviderConfig struct {
 	SecretsManager SecretsManager
 }
 
+// NewDockerComputeProvider creates a new DockerComputeProvider based on the given configuration.
 func NewDockerComputeProvider(config DockerComputeProviderConfig) *DockerComputeProvider {
 	dcm := NewDockerComputeManager(DockerComputeManagerConfig{
 		Concurrency: config.Concurrency,
@@ -46,12 +48,14 @@ func NewDockerComputeProvider(config DockerComputeProviderConfig) *DockerCompute
 	return &DockerComputeProvider{dcm, registry, secretsManager}
 }
 
+// RegisterPlugin registers a plugin with the DockerComputeProvider.
 func (dcp *DockerComputeProvider) RegisterPlugin(plugin *Plugin) (PluginRegistrationOutput, error) {
 	output := PluginRegistrationOutput{}
 	err := dcp.registry.Register(plugin)
 	return output, err
 }
 
+// SubmitJob submits a job for execution.
 func (dcp *DockerComputeProvider) SubmitJob(job *Job) error {
 	jobid := uuid.New().String()
 	plugin, err := dcp.registry.Get(job.JobDefinition)
@@ -65,17 +69,19 @@ func (dcp *DockerComputeProvider) SubmitJob(job *Job) error {
 	dcp.manager.AddJob(&DockerJob{
 		Job:            job,
 		Plugin:         plugin,
-		Status:         Runnable,
+		Status:         Submitted,
 		SecretsManager: dcp.sm,
 	})
 	return nil
 }
 
+// TerminateJobs terminates jobs based on the provided input.
 func (dcp *DockerComputeProvider) TerminateJobs(input TerminateJobInput) error {
 	dcp.manager.TerminateJobs(input)
 	return nil
 }
 
+// Status retrieves and returns job summaries based on the query.
 func (dcp *DockerComputeProvider) Status(jobQueue string, query JobsSummaryQuery) error {
 
 	summaries := make([]JobSummary, len(dcp.manager.queue.Jobs()))
