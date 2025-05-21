@@ -37,7 +37,8 @@ type InMemoryJobQueue struct {
 func (jq *InMemoryJobQueue) Add(job *DockerJob) {
 	jq.Lock()
 	defer jq.Unlock()
-	jq.queue[job.Job.ManifestID.String()] = job
+	//jq.queue[job.Job.ManifestID.String()] = job
+	jq.queue[job.Job.ID.String()] = job
 }
 
 func (jq *InMemoryJobQueue) Jobs(statuses ...JobStatus) []*DockerJob {
@@ -70,7 +71,8 @@ func (jq *InMemoryJobQueue) UpdateJobs() []uuid.UUID {
 					job.Status = Pending
 				} else {
 					job.Status = Runnable
-					pendingThatCanStart = append(pendingThatCanStart, job.Job.ManifestID)
+					//pendingThatCanStart = append(pendingThatCanStart, job.Job.ManifestID)
+					pendingThatCanStart = append(pendingThatCanStart, job.Job.ID)
 				}
 			}
 		}

@@ -6,14 +6,12 @@ import (
 	"fmt"
 	"io"
 	"log"
-	"os"
 	"strconv"
 
 	"github.com/docker/docker/api/types/container"
 	"github.com/docker/docker/api/types/image"
 	"github.com/docker/docker/api/types/mount"
 	"github.com/docker/docker/client"
-	"github.com/google/uuid"
 	. "github.com/usace/cloudcompute"
 )
 
@@ -32,6 +30,7 @@ type DockerEvent struct {
 	} `json:"progressDetail"`
 }
 
+// @TODO stop using a global background context.  Need to handle this better
 var ctx context.Context = context.Background()
 
 func NewRunner(job *DockerJob) (*DockerJobRunner, error) {
@@ -102,7 +101,7 @@ func (dr *DockerJobRunner) Run() error {
 
 	/////
 	//log.Println(resp)
-	log.Printf("RUNNING JOB: %s\n", dr.djob.Job.ManifestID)
+	log.Printf("RUNNING JOB: %s\n", dr.djob.Job.ID)
 	/////
 
 	if err := dr.client.ContainerStart(ctx, resp.ID, container.StartOptions{}); err != nil {
@@ -110,58 +109,9 @@ func (dr *DockerJobRunner) Run() error {
 		return err
 	}
 
-	options := container.LogsOptions{
-		ShowStdout: true,
-		ShowStderr: true,
-		Follow:     true, // Follow the log stream
-		Timestamps: true,
-		Tail:       "one",
-	}
+	drm := NewDockerRunMonitor(dr, resp.ID)
+	drm.Wait()
 
-	logreader, err := dr.client.ContainerLogs(ctx, resp.ID, options)
-	if err != nil {
-		dr.djob.Status = Failed
-		return err
-	}
-	defer logreader.Close()
-
-	// Continuously read logs from the container
-	buffer := make([]byte, 1024)
-	for {
-		containerJSON, err := dr.client.ContainerInspect(ctx, resp.ID)
-		if err != nil {
-			dr.djob.Status = Failed
-			return err
-		}
-
-		if !containerJSON.State.Running {
-			if containerJSON.State.ExitCode == 1 {
-				dr.djob.Status = Failed
-			}
-			break
-		}
-
-		n, err := logreader.Read(buffer)
-		if err != nil && err != io.EOF {
-			dr.djob.Status = Failed
-			return err
-		}
-		//os.Stdout.Write(buffer[:n])
-		writeToStdOut(buffer[:n], dr.djob.Job.ManifestID)
-	}
-
-	//read anything remaining
-	n, err := logreader.Read(buffer)
-	if err != nil && err != io.EOF {
-		dr.djob.Status = Failed
-		return err
-	}
-
-	//os.Stdout.Write(buffer[:n])
-	writeToStdOut(buffer[:n], dr.djob.Job.ManifestID)
-	if !dr.terminated && dr.djob.Status != Failed {
-		dr.djob.Status = Succeeded
-	}
 	return nil
 }
 
@@ -283,23 +233,4 @@ func getHostConfig(djob *DockerJob) (*container.HostConfig, error) {
 		Mounts: mounts,
 	}
 	return &config, nil
-}
-
-func writeToStdOut(buffer []byte, manifestId uuid.UUID) {
-	line := []byte{}
-	for _, b := range buffer {
-		if b == '\n' {
-			pl := fmt.Sprintf("JOB: %s: %s\n", manifestId, line)
-			os.Stdout.WriteString(pl)
-			line = line[:0]
-		} else {
-			line = append(line, b)
-		}
-	}
-
-	//flush any remaining text
-	if len(line) > 0 {
-		pl := fmt.Sprintf("JOB: %s: %s\n", manifestId, line)
-		os.Stdout.WriteString(pl)
-	}
 }

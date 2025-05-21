@@ -67,7 +67,7 @@ func NewDockerComputeManager(config DockerComputeManagerConfig) *DockerComputeMa
 
 func (dcm *DockerComputeManager) AddJob(djob *DockerJob) {
 	dcm.queue.Add(djob)
-	dcm.queueEvents <- fmt.Sprintf("SUBMITTED JOB: %s", djob.Job.ManifestID)
+	dcm.queueEvents <- fmt.Sprintf("SUBMITTED JOB: %s", djob.Job.ID)
 }
 
 func (dcm *DockerComputeManager) runner() {
@@ -86,7 +86,7 @@ func (dcm *DockerComputeManager) runner() {
 			go func(dockerJob *DockerJob) {
 				defer func() {
 					<-dcm.limiter
-					dcm.queueEvents <- fmt.Sprintf("FINISHED JOB: %s", dockerJob.Job.ManifestID)
+					dcm.queueEvents <- fmt.Sprintf("FINISHED JOB: %s", dockerJob.Job.ID)
 				}()
 				//dockerJob.Status = Starting
 				runner, err := NewRunner(dockerJob)
