@@ -76,7 +76,10 @@ func (dr *DockerJobRunner) Terminate() error {
 }
 
 func (dr *DockerJobRunner) Run() error {
-	dr.imagePull()
+	err := dr.imagePull()
+	if err != nil {
+		return err
+	}
 
 	containerConfig, err := getContainerConfig(dr.djob)
 	if err != nil {
@@ -115,12 +118,12 @@ func (dr *DockerJobRunner) Run() error {
 	return nil
 }
 
-func (dr *DockerJobRunner) imagePull() {
+func (dr *DockerJobRunner) imagePull() error {
 	if !dr.isLocalImage() {
 		log.Printf("Image: %s not found on local system.  Pulling from the remote address.\n", dr.djob.Plugin.ImageAndTag)
 		reader, err := dr.client.ImagePull(ctx, dr.djob.Plugin.ImageAndTag, image.PullOptions{})
 		if err != nil {
-			panic(err)
+			return err
 		}
 		decoder := json.NewDecoder(reader)
 
@@ -131,11 +134,12 @@ func (dr *DockerJobRunner) imagePull() {
 				if err == io.EOF {
 					break
 				}
-				panic(err)
+				return err
 			}
 			fmt.Printf("EVENT: %+v\n", event)
 		}
 	}
+	return nil
 }
 
 func (dr *DockerJobRunner) isLocalImage() bool {
