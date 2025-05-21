@@ -39,13 +39,13 @@ type CloudCompute struct {
 // currently an event number of -1 represents an invalid event received from the event generator.
 // These events are skipped
 func (cc *CloudCompute) Run() error {
-	return cc.RunParralel(1)
+	return cc.RunParallel(1)
 }
 
 // Runs a Compute on the ComputeProvider submitting jobs in parallel based on the concurrency requested
 // currently an event number of -1 represents an invalid event received from the event generator.
 // These events are skipped
-func (cc *CloudCompute) RunParralel(concurrency int) error {
+func (cc *CloudCompute) RunParallel(concurrency int) error {
 	//cc.submissionIdMap = make(map[uuid.UUID]string)
 
 	cr := NewConcurrentRunner(concurrency)
@@ -54,19 +54,18 @@ func (cc *CloudCompute) RunParralel(concurrency int) error {
 
 		event, eventErr := cc.Events.NextEvent()
 
+		//the event generator returns an error if it cannot generate a valid event
+		//processing will continue when a valid event is generated.  An example would be
+		//generating events from csv that includes invalid values (emply starting or ending values)
+		if eventErr != nil {
+			log.Printf("error generating next event: %s\n", eventErr)
+			continue
+		}
+
 		cr.Run(func() {
 
 			event.submissionIdMap = make(map[uuid.UUID]string) //reduce the scope of the idmap to a single event
 
-			//the event generator returns an error if it cannot generate a valid event
-			//processing will continue when a valid event is generated.  An example would be
-			//generating events from csv that includes invalid values (emply starting or ending values)
-			if eventErr != nil {
-				log.Printf("error generating next event: %s\n", eventErr)
-				return
-			}
-
-			//go func(event Event) {
 			for _, manifest := range event.Manifests {
 				if len(manifest.Inputs.PayloadAttributes) > 0 || len(manifest.Inputs.DataSources) > 0 || len(manifest.Actions) > 0 {
 					err := manifest.WritePayload() //guarantees the payload id written to the manifest
@@ -75,6 +74,7 @@ func (cc *CloudCompute) RunParralel(concurrency int) error {
 						return
 					}
 				}
+
 				env := append(manifest.Inputs.Environment,
 					KeyValuePair{CcPayloadId, manifest.payloadID.String()},
 					KeyValuePair{CcManifestId, manifest.ManifestID.String()},
@@ -92,6 +92,7 @@ func (cc *CloudCompute) RunParralel(concurrency int) error {
 				}
 
 				env = append(env, KeyValuePair{CcPluginDefinition, manifest.PluginDefinition}) //@TODO do we need this?
+
 				jobID := uuid.New()
 				job := Job{
 					ID:            jobID,
