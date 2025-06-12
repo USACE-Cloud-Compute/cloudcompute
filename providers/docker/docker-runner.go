@@ -177,18 +177,14 @@ func getContainerConfig(djob *DockerJob) (*container.Config, error) {
 
 	config := container.Config{
 		Image: djob.Plugin.ImageAndTag,
-		Cmd:   djob.Job.ContainerOverrides.Command,
-		Env:   KvpToEnv(env),
+		//Cmd:   djob.Job.ContainerOverrides.Command,
+		Entrypoint: djob.Job.ContainerOverrides.Command,
+		Env:        KvpToEnv(env),
 	}
 
-	// for _, kvp := range env {
-	// 	fmt.Printf("%s=%s\n", kvp.Name, kvp.Value)
-	// }
-
 	if len(djob.Job.ContainerOverrides.Command) == 0 {
-		config.Cmd = djob.Plugin.Command
-	} else {
-		config.Cmd = djob.Job.ContainerOverrides.Command
+		//config.Cmd = djob.Plugin.Command
+		config.Entrypoint = djob.Plugin.Command
 	}
 
 	return &config, nil
