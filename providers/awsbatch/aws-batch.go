@@ -339,24 +339,37 @@ func (abp *AwsBatchProvider) Status(jobQueue string, query JobsSummaryQuery) err
 // @TODO this assumes the logs are rather short.
 // Need to update for logs that require pagenation in the AWS SDK
 func (abp *AwsBatchProvider) JobLog(submittedJobId string, token *string) (JobLogOutput, error) {
+
+	//allow zero value in the call but set as nil for AWS
+	if token != nil && *token == "" {
+		token = nil
+	}
+
 	jobDesc, err := abp.describeBatchJobs([]string{submittedJobId})
 	if err != nil {
 		return JobLogOutput{}, err
 	}
+	var limit int32 = 1000
 	cfg := cloudwatchlogs.GetLogEventsInput{
 		LogGroupName:  &awsLogGroup,
 		LogStreamName: jobDesc.Jobs[0].Container.LogStreamName,
+		Limit:         &limit,
+		StartFromHead: aws.Bool(true),
+		NextToken:     token,
 	}
 	logevents, err := abp.logs.GetLogEvents(ctx, &cfg)
 	if err != nil {
 		return JobLogOutput{}, err
 	}
-	out := make([]string, len(logevents.Events))
+
 	if logevents == nil {
+
 		return JobLogOutput{Logs: []string{"No logs"}}, nil
 	}
+
+	out := make([]string, len(logevents.Events))
 	for i, v := range logevents.Events {
-		t := time.Unix(*v.Timestamp, 0)
+		t := time.Unix(*v.Timestamp/1000, 0)
 		out[i] = fmt.Sprintf("%v: %s", t, *v.Message)
 	}
 
