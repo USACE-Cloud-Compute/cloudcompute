@@ -302,11 +302,11 @@ func (abp *AwsBatchProvider) Status(jobQueue string, query JobsSummaryQuery) err
 	var queryString string
 	switch query.QueryLevel {
 	case SUMMARY_COMPUTE:
-		queryString = fmt.Sprintf("%s_C_%s*", CcProfile, query.QueryValue.Compute)
+		queryString = fmt.Sprintf("%s_c_%s*", CcProfile, query.QueryValue.Compute)
 	case SUMMARY_EVENT:
-		queryString = fmt.Sprintf("%s_C_%s_E_%s*", CcProfile, query.QueryValue.Compute, query.QueryValue.Event)
-	case SUMMARY_MANIFEST:
-		queryString = fmt.Sprintf("%s_C_%s_E_%s_M_%s", CcProfile, query.QueryValue, query.QueryValue.Compute, query.QueryValue.Event)
+		queryString = fmt.Sprintf("%s_c_%s_e_%s*", CcProfile, query.QueryValue.Compute, query.QueryValue.Event)
+	case SUMMARY_JOB:
+		queryString = fmt.Sprintf("%s_c_%s_e_%s_j_%s", CcProfile, query.QueryValue.Compute, query.QueryValue.Event, query.QueryValue.Job)
 	}
 
 	eventFilter := types.KeyValuesPair{

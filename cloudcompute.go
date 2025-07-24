@@ -4,6 +4,7 @@ import (
 	"errors"
 	"fmt"
 	"log"
+	"strings"
 
 	. "github.com/usace/cc-go-sdk"
 	"github.com/usace/cloudcompute/utils"
@@ -95,10 +96,11 @@ func (cc *CloudCompute) RunParallel(concurrency int) error {
 
 				jobID := uuid.New()
 				job := Job{
-					ID:            jobID,
-					EventID:       event.ID,
-					ManifestID:    manifest.ManifestID,
-					JobName:       fmt.Sprintf("%s_C_%s_E_%s_J_%s", CcProfile, cc.ID.String(), event.ID.String(), jobID),
+					ID:         jobID,
+					EventID:    event.ID,
+					ManifestID: manifest.ManifestID,
+					//JobName:       fmt.Sprintf("%s_C_%s_E_%s_J_%s", CcProfile, cc.ID.String(), event.ID.String(), jobID),
+					JobName:       fmt.Sprintf("%s_c_%s_e_%s_j_%s", strings.ToLower(CcProfile), cc.ID.String(), event.ID.String(), jobID),
 					JobQueue:      cc.JobQueue,
 					JobDefinition: manifest.PluginDefinition,
 					DependsOn:     event.mapDependencies(&manifest),
@@ -347,9 +349,9 @@ type PluginComputeVolumes struct {
 }
 
 type PluginRegistrationOutput struct {
-	Name         string
-	ResourceName string
-	Revision     int32
+	Name         string `json:"name"`
+	ResourceName string `json:"resourceName"`
+	Revision     int32  `json:"revision"`
 }
 
 type CcJobStore interface {

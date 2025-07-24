@@ -17,9 +17,10 @@ const (
 	ResourceTypeMemory          ResourceType = "MEMORY"
 	ResourceTypeAttachedStorage ResourceType = "ATTACHEDSTORAGE"
 
-	SUMMARY_COMPUTE  string = "COMPUTE"
-	SUMMARY_EVENT    string = "EVENT"
-	SUMMARY_MANIFEST string = "MANIFEST"
+	SUMMARY_COMPUTE string = "COMPUTE"
+	SUMMARY_EVENT   string = "EVENT"
+	//SUMMARY_MANIFEST string = "MANIFEST"
+	SUMMARY_JOB string = "JOB"
 
 	AWSBATCH    ComputeProviderType = 0
 	LOCALDOCKER ComputeProviderType = 1
@@ -194,9 +195,9 @@ type JobsSummaryQuery struct {
 }
 
 type JobNameParts struct {
-	Compute  string
-	Event    string
-	Manifest string
+	Compute string
+	Event   string
+	Job     string
 }
 
 func (jnp *JobNameParts) Parse(jobname string) error {
@@ -207,7 +208,7 @@ func (jnp *JobNameParts) Parse(jobname string) error {
 	}
 	jnp.Compute = guids[0]
 	jnp.Event = guids[1]
-	jnp.Manifest = guids[2]
+	jnp.Job = guids[2]
 	return nil
 }
 
