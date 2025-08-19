@@ -17,9 +17,16 @@ import (
 )
 
 // EventGenerators provide an iterator type interface to work with sets of events for a Compute.
-type EventGenerator interface {
+// old Generator interface was too difficult to synchronize in a concurrent access scenario, so it
+// was simplified below to a single call that can be managed within one mutex
+type EventGeneratorOld interface {
 	HasNextEvent() bool
 	NextEvent() (Event, error)
+}
+
+// EventGenerators provide an iterator type interface to work with sets of events for a Compute.
+type EventGenerator interface {
+	NextEvent() (Event, bool, error)
 }
 
 type StreamingEventGenerator struct {
@@ -59,23 +66,24 @@ func NewStreamingEventGenerator(event Event, scanner *bufio.Scanner) (*Streaming
 	}, nil
 }
 
-func (seg *StreamingEventGenerator) HasNextEvent() bool {
-	seg.mu.Lock()
-	defer seg.mu.Unlock()
-	return seg.scanner.Scan()
-}
+// func (seg *StreamingEventGenerator) HasNextEvent() bool {
+// 	seg.mu.Lock()
+// 	defer seg.mu.Unlock()
+// 	return seg.scanner.Scan()
+// }
 
-func (seg *StreamingEventGenerator) NextEvent() (Event, error) {
+func (seg *StreamingEventGenerator) NextEvent() (Event, bool, error) {
 	seg.mu.Lock()
 	defer seg.mu.Unlock()
+	hasNext := seg.scanner.Scan()
 	event := seg.event
 	eventId := seg.scanner.Text()
 	if eventId == "" {
-		return event, fmt.Errorf("empty event identifier at index: %d", seg.index)
+		return event, hasNext, fmt.Errorf("empty event identifier at index: %d", seg.index)
 	}
 	seg.index++
 	event.EventIdentifier = eventId
-	return event, nil
+	return event, hasNext, nil
 }
 
 type ArrayEventGenerator struct {
@@ -89,6 +97,7 @@ func NewArrayEventGenerator(event Event, start int64, end int64) (*ArrayEventGen
 	manifestCount := len(event.Manifests)
 
 	//order the set of manifests
+	//@TODO...need to order all event generator manifest sets!!!
 	if manifestCount > 1 {
 		orderedIds, err := event.TopoSort()
 		if err != nil {
@@ -117,19 +126,20 @@ func NewArrayEventGenerator(event Event, start int64, end int64) (*ArrayEventGen
 	}, nil
 }
 
-func (aeg *ArrayEventGenerator) HasNextEvent() bool {
-	aeg.mu.Lock()
-	defer aeg.mu.Unlock()
-	return aeg.position <= aeg.end
-}
+// func (aeg *ArrayEventGenerator) HasNextEvent() bool {
+// 	aeg.mu.Lock()
+// 	defer aeg.mu.Unlock()
+// 	return aeg.position <= aeg.end
+// }
 
-func (aeg *ArrayEventGenerator) NextEvent() (Event, error) {
+func (aeg *ArrayEventGenerator) NextEvent() (Event, bool, error) {
 	aeg.mu.Lock()
 	defer aeg.mu.Unlock()
 	event := aeg.event
 	event.EventIdentifier = strconv.Itoa(int(aeg.position))
+	hasNext := aeg.position <= aeg.end
 	aeg.position++
-	return event, nil
+	return event, hasNext, nil
 }
 
 // EventList is an EventGenerator composed of a slice of events.
@@ -150,25 +160,27 @@ func NewEventList(events []Event) *EventList {
 }
 
 // Determines if all of the events have been enumerated
-func (el *EventList) HasNextEvent() bool {
-	el.mu.Lock()
-	defer el.mu.Unlock()
-	el.currentEvent++
-	return el.currentEvent < len(el.events)
-}
+// func (el *EventList) HasNextEvent() bool {
+// 	el.mu.Lock()
+// 	defer el.mu.Unlock()
+// 	el.currentEvent++
+// 	return el.currentEvent < len(el.events)
+// }
 
 //@TODO: Could optimize the sorting an instead of returning a list of ordered IDs, return a sorted list of manifests.....
 
 // Retrieves the next event.  Attempts to perform a topological sort on the manifest slice before returning.
 // If sort fails it will log the issue and return the unsorted manifest slice
-func (el *EventList) NextEvent() (Event, error) {
+func (el *EventList) NextEvent() (Event, bool, error) {
 	el.mu.Lock()
 	defer el.mu.Unlock()
+	el.currentEvent++
+	hasNext := el.currentEvent < len(el.events)
 	event := el.events[el.currentEvent]
 	if event.EventIdentifier == "" {
 		event.EventIdentifier = strconv.Itoa(el.currentEvent)
 	}
-	return event, nil
+	return event, hasNext, nil
 }
 
 type BatchEvent struct {
@@ -191,23 +203,24 @@ func NewBatchEventGenerator(event Event, batch []BatchEvent) *BatchEventGenerato
 	}
 }
 
-func (beg *BatchEventGenerator) HasNextEvent() bool {
-	return beg.index+1 <= beg.size
-}
+// func (beg *BatchEventGenerator) HasNextEvent() bool {
+// 	return beg.index+1 <= beg.size
+// }
 
 // @TODO how to handle error in set of events?
-func (beg *BatchEventGenerator) NextEvent() (Event, error) {
+func (beg *BatchEventGenerator) NextEvent() (Event, bool, error) {
+	hasNext := beg.index+1 <= beg.size
 	batchevent := beg.batch[beg.index]
 	computeManifests := ComputeManifests(beg.event.Manifests)
 	mergedManifests := make([]ComputeManifest, computeManifests.Len())
 	for i := 0; i < computeManifests.Len(); i++ {
 		manifest, err := computeManifests.GetManifestByIndex(i, true) //get a deep copy of the manifest
 		if err != nil {
-			return Event{}, err
+			return Event{}, hasNext, err
 		}
 		mergedManifest, err := mergeComputeManifest(*manifest, batchevent.ManifestOverrides)
 		if err != nil {
-			return Event{}, err
+			return Event{}, hasNext, err
 		}
 		mergedManifests[i] = mergedManifest
 	}
@@ -217,7 +230,7 @@ func (beg *BatchEventGenerator) NextEvent() (Event, error) {
 		EventIdentifier: batchevent.EventIdentifier,
 		Manifests:       mergedManifests,
 	}
-	return nextEvent, nil
+	return nextEvent, hasNext, nil
 }
 
 // ///////////////////////////////////////

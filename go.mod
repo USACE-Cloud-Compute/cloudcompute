@@ -2,7 +2,9 @@ module github.com/usace/cloudcompute
 
 go 1.24.0
 
-toolchain go1.24.5
+toolchain go1.24.6
+
+//toolchain go1.24.5
 
 //replace github.com/usace/cc-go-sdk => /workspaces/cc-go-sdk
 
@@ -44,8 +46,12 @@ require (
 	github.com/containerd/log v0.1.0 // indirect
 	github.com/davecgh/go-spew v1.1.1 // indirect
 	github.com/distribution/reference v0.6.0 // indirect
+	github.com/dlclark/regexp2 v1.11.4 // indirect
 	github.com/docker/go-connections v0.5.0 // indirect
 	github.com/docker/go-units v0.5.0 // indirect
+	github.com/dop251/base64dec v0.0.0-20231022112746-c6c9f9a96217 // indirect
+	github.com/dop251/goja v0.0.0-20250630131328-58d95d85e994 // indirect
+	github.com/dop251/goja_nodejs v0.0.0-20250409162600-f7acab6894b0 // indirect
 	github.com/emicklei/go-restful/v3 v3.11.0 // indirect
 	github.com/felixge/httpsnoop v1.0.4 // indirect
 	github.com/fxamacker/cbor/v2 v2.7.0 // indirect
@@ -54,9 +60,11 @@ require (
 	github.com/go-openapi/jsonpointer v0.21.0 // indirect
 	github.com/go-openapi/jsonreference v0.20.2 // indirect
 	github.com/go-openapi/swag v0.23.0 // indirect
+	github.com/go-sourcemap/sourcemap v2.1.4+incompatible // indirect
 	github.com/gogo/protobuf v1.3.2 // indirect
 	github.com/google/gnostic-models v0.6.9 // indirect
 	github.com/google/go-cmp v0.7.0 // indirect
+	github.com/google/pprof v0.0.0-20241029153458-d1b30febd7db // indirect
 	github.com/invopop/jsonschema v0.13.0 // indirect
 	github.com/josharian/intern v1.0.0 // indirect
 	github.com/json-iterator/go v1.1.12 // indirect
