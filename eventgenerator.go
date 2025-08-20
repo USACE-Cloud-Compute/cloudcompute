@@ -19,6 +19,9 @@ import (
 // EventGenerators provide an iterator type interface to work with sets of events for a Compute.
 // old Generator interface was too difficult to synchronize in a concurrent access scenario, so it
 // was simplified below to a single call that can be managed within one mutex
+// List type event generators will return new and separate manifests for each event
+// All others (array, streaming) will return the same manifests but with a unique event identifier for
+// each event which allows for shared payloads (write one and use for every event)
 type EventGeneratorOld interface {
 	HasNextEvent() bool
 	NextEvent() (Event, error)

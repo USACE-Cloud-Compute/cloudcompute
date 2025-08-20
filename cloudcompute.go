@@ -75,6 +75,10 @@ func (cc *CloudCompute) RunParallel(concurrency int) error {
 
 			//////////////////////////////////
 			// Run postprocessing if it exists
+			// note that for an event generator that typically creates a single
+			// payload (e.g. array or streaming) and only changes the event identifier,
+			// using an event postprocessor will cause a separate payload to be created
+			// for every event.
 			if cc.EventProcessor != nil {
 				var err error
 				eventIdentifier := event.EventIdentifier
@@ -90,7 +94,7 @@ func (cc *CloudCompute) RunParallel(concurrency int) error {
 
 			for _, manifest := range event.Manifests {
 				if len(manifest.Inputs.PayloadAttributes) > 0 || len(manifest.Inputs.DataSources) > 0 || len(manifest.Actions) > 0 {
-					err := manifest.WritePayload() //guarantees the payload id written to the manifest
+					err := manifest.WritePayload() //guarantees the payload is written to the manifest
 					if err != nil {
 						log.Printf("error writing payload for event %s: %s:\n", event.EventIdentifier, err)
 						return
