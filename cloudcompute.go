@@ -362,8 +362,9 @@ type MountPoint struct {
 }
 
 type PluginComputeEnvironment struct {
-	VCPU   string `json:"vcpu" jsonschema:"title=Virtual CPUs"`
-	Memory string `json:"memory" jsonschema:"title=Memory in MB"`
+	VCPU       string   `json:"vcpu" jsonschema:"title=Virtual CPUs"`
+	Memory     string   `json:"memory" jsonschema:"title=Memory in MB"`
+	ExtraHosts []string `json:"extraHosts" jsonschema:"title=Extra Hosts for the Docker API"`
 }
 
 type PluginComputeVolumes struct {

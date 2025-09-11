@@ -194,6 +194,7 @@ func getHostConfig(djob *DockerJob) (*container.HostConfig, error) {
 
 	memoryStr := djob.Plugin.ComputeEnvironment.Memory
 	cpuStr := djob.Plugin.ComputeEnvironment.VCPU
+	extraHosts := djob.Plugin.ComputeEnvironment.ExtraHosts
 
 	for _, rr := range djob.Job.ContainerOverrides.ResourceRequirements {
 		switch rr.Type {
@@ -225,6 +226,7 @@ func getHostConfig(djob *DockerJob) (*container.HostConfig, error) {
 			}
 		}
 	}
+
 	config := container.HostConfig{
 		Resources: container.Resources{
 			Memory:   int64(memory) * mbToByte,
@@ -232,5 +234,10 @@ func getHostConfig(djob *DockerJob) (*container.HostConfig, error) {
 		},
 		Mounts: mounts,
 	}
+
+	if len(extraHosts) > 0 {
+		config.ExtraHosts = extraHosts
+	}
+
 	return &config, nil
 }
