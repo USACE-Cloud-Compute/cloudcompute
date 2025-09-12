@@ -73,6 +73,14 @@ func (cc *CloudCompute) RunParallel(concurrency int) error {
 
 		cr.Run(func() {
 
+			//start by sorting the manifests if necessary
+			if !event.sorted {
+				err := event.SortManifests()
+				if err != nil {
+					log.Printf("unable to sort the manifests for event %s: %s", event.EventIdentifier, err)
+				}
+			}
+
 			//////////////////////////////////
 			// Run postprocessing if it exists
 			// note that for an event generator that typically creates a single
@@ -294,6 +302,9 @@ type Event struct {
 	ID              uuid.UUID         `json:"id"`
 	EventIdentifier string            `json:"event"` //RULES ONLY NUMBERS, STRINGS, DASH, AND UNDERSCORE
 	Manifests       []ComputeManifest `json:"manifests"`
+
+	//flag to toggle when the event is sorted
+	sorted bool
 
 	//map of cloud compute job identifier (manifest id) to submitted job identifier (VendorID) in the compute provider
 	submissionIdMap map[uuid.UUID]string
