@@ -89,14 +89,60 @@ func (seg *StreamingEventGenerator) NextEvent() (Event, bool, error) {
 	return event, hasNext, nil
 }
 
+//--------------------------------------------
+//--------------------------------------------
+//--------------------------------------------
+//--------------------------------------------
+//--------------------------------------------
+
+type PerEventLooper struct {
+	perEventLoopData     []map[string]string
+	perEventLoopPosition int
+	perEventLoops        int
+}
+
+func NewPerEventLooper(pel []map[string]string) *PerEventLooper {
+	perEventLoops := len(pel)
+
+	if perEventLoops == 0 {
+		return nil
+	}
+
+	return &PerEventLooper{
+		perEventLoopData:     pel,
+		perEventLoopPosition: 0,
+		perEventLoops:        perEventLoops,
+	}
+}
+
+func (pel *PerEventLooper) Next() (envVars map[string]string, incrementEvent bool) {
+	if pel.perEventLoopPosition < pel.perEventLoops-1 {
+		pos := pel.perEventLoopPosition
+		pel.perEventLoopPosition++
+		return pel.perEventLoopData[pos], false
+	} else {
+		pos := pel.perEventLoopPosition
+		pel.perEventLoopPosition = 0
+		return pel.perEventLoopData[pos], true
+	}
+}
+
+//--------------------------------------------
+//--------------------------------------------
+//--------------------------------------------
+//--------------------------------------------
+//--------------------------------------------
+//--------------------------------------------
+
 type ArrayEventGenerator struct {
 	event    Event
 	end      int64
 	position int64
 	mu       sync.Mutex
+	pel      *PerEventLooper
 }
 
-func NewArrayEventGenerator(event Event, start int64, end int64) (*ArrayEventGenerator, error) {
+func NewArrayEventGenerator(event Event, perEventLoopData []map[string]string, start int64, end int64) (*ArrayEventGenerator, error) {
 	manifestCount := len(event.Manifests)
 
 	//order the set of manifests
@@ -122,28 +168,115 @@ func NewArrayEventGenerator(event Event, start int64, end int64) (*ArrayEventGen
 			return nil, fmt.Errorf("failed to write payload for manifest %s: %s", event.Manifests[i].ManifestID, err)
 		}
 	}
+
+	perEventLooper := NewPerEventLooper(perEventLoopData)
+
 	return &ArrayEventGenerator{
 		event:    event,
 		position: start,
 		end:      end,
+		pel:      perEventLooper,
 	}, nil
 }
-
-// func (aeg *ArrayEventGenerator) HasNextEvent() bool {
-// 	aeg.mu.Lock()
-// 	defer aeg.mu.Unlock()
-// 	return aeg.position <= aeg.end
-// }
 
 func (aeg *ArrayEventGenerator) NextEvent() (Event, bool, error) {
 	aeg.mu.Lock()
 	defer aeg.mu.Unlock()
 	event := aeg.event
+	var additionalEnvVars map[string]string
+	incrementEvent := true
+	if aeg.pel != nil {
+		additionalEnvVars, incrementEvent = aeg.pel.Next()
+		event.AdditionalEventEnvVars = MapToKeyValuePairs(additionalEnvVars)
+	}
 	event.EventIdentifier = strconv.Itoa(int(aeg.position))
-	hasNext := aeg.position <= aeg.end
-	aeg.position++
+	hasNext := true
+	if incrementEvent {
+		hasNext = aeg.position < aeg.end
+		aeg.position++
+	}
 	return event, hasNext, nil
+
 }
+
+//--------------------------------------------
+//--------------------------------------------
+//--------------------------------------------
+//--------------------------------------------
+//--------------------------------------------
+//--------------------------------------------
+//--------------------------------------------
+//--------------------------------------------
+//--------------------------------------------
+
+// Determines if all of the events have been enumerated
+// func (el *EventList) HasNextEvent() bool {
+// 	el.mu.Lock()
+// 	defer el.mu.Unlock()
+// 	el.currentEvent++
+// 	return el.currentEvent < len(el.events)
+// }
+
+//--------------------------------------------
+//--------------------------------------------
+//--------------------------------------------
+//--------------------------------------------
+//--------------------------------------------
+//--------------------------------------------
+//--------------------------------------------
+//--------------------------------------------
+
+// type ArrayEventGenerator struct {
+// 	event    Event
+// 	end      int64
+// 	position int64
+// 	mu       sync.Mutex
+// }
+
+// func NewArrayEventGenerator(event Event, junk []map[string]string, start int64, end int64) (*ArrayEventGenerator, error) {
+// 	manifestCount := len(event.Manifests)
+
+// 	//order the set of manifests
+// 	//@TODO...need to order all event generator manifest sets!!!
+// 	if manifestCount > 1 {
+// 		orderedIds, err := event.TopoSort()
+// 		if err != nil {
+// 			log.Printf("Unable to order event %s: %s\n", event.ID, err)
+// 		}
+// 		orderedManifests := make([]ComputeManifest, len(event.Manifests))
+// 		for i, oid := range orderedIds {
+// 			orderedManifests[i], err = getManifest(event.Manifests, oid)
+// 			if err != nil {
+// 				log.Printf("Unable to order event %s: %s\n", event.ID, err)
+// 			}
+// 		}
+// 		event.Manifests = orderedManifests
+// 	}
+
+// 	for i := 0; i < manifestCount; i++ {
+// 		err := event.Manifests[i].WritePayload()
+// 		if err != nil {
+// 			return nil, fmt.Errorf("failed to write payload for manifest %s: %s", event.Manifests[i].ManifestID, err)
+// 		}
+// 	}
+// 	return &ArrayEventGenerator{
+// 		event:    event,
+// 		position: start,
+// 		end:      end,
+// 	}, nil
+// }
+
+// func (aeg *ArrayEventGenerator) NextEvent() (Event, bool, error) {
+// 	aeg.mu.Lock()
+// 	defer aeg.mu.Unlock()
+// 	event := aeg.event
+// 	event.EventIdentifier = strconv.Itoa(int(aeg.position))
+// 	hasNext := aeg.position <= aeg.end
+// 	aeg.position++
+// 	return event, hasNext, nil
+// }
+
+//@TODO: Could optimize the sorting an instead of returning a list of ordered IDs, return a sorted list of manifests.....
 
 // EventList is an EventGenerator composed of a slice of events.
 // Events are enumerated in the order they were placed in the slice.
@@ -161,16 +294,6 @@ func NewEventList(events []Event) *EventList {
 	}
 	return &el
 }
-
-// Determines if all of the events have been enumerated
-// func (el *EventList) HasNextEvent() bool {
-// 	el.mu.Lock()
-// 	defer el.mu.Unlock()
-// 	el.currentEvent++
-// 	return el.currentEvent < len(el.events)
-// }
-
-//@TODO: Could optimize the sorting an instead of returning a list of ordered IDs, return a sorted list of manifests.....
 
 // Retrieves the next event.  Attempts to perform a topological sort on the manifest slice before returning.
 // If sort fails it will log the issue and return the unsorted manifest slice

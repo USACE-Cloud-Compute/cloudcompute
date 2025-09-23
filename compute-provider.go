@@ -258,3 +258,11 @@ func (kvps *KeyValuePairs) Merge(newKvps *KeyValuePairs) {
 		kvps.SetVal(kvp.Name, kvp.Value)
 	}
 }
+
+func MapToKeyValuePairs(mapdata map[string]string) KeyValuePairs {
+	kvps := KeyValuePairs{}
+	for k, v := range mapdata {
+		kvps.SetVal(k, v)
+	}
+	return kvps
+}

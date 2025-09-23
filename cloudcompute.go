@@ -58,11 +58,6 @@ func (cc *CloudCompute) RunParallel(concurrency int) error {
 
 		event, hasNext, eventErr := cc.Events.NextEvent()
 
-		//if we are out of events, break out of the event loop
-		if !hasNext {
-			break
-		}
-
 		//the event generator returns an error if it cannot generate a valid event
 		//processing will continue when a valid event is generated.  An example would be
 		//generating events from csv that includes invalid values (emply starting or ending values)
@@ -86,7 +81,9 @@ func (cc *CloudCompute) RunParallel(concurrency int) error {
 			// note that for an event generator that typically creates a single
 			// payload (e.g. array or streaming) and only changes the event identifier,
 			// using an event postprocessor will cause a separate payload to be created
-			// for every event.
+			// for every event.  The reason for this is that the event processor
+			// makes a deep copy of the event to modify.  Since the original event never gets
+			// a payload id associated with it, the writePayload method will keep writing new payloads
 			if cc.EventProcessor != nil {
 				var err error
 				eventIdentifier := event.EventIdentifier
@@ -127,6 +124,9 @@ func (cc *CloudCompute) RunParallel(concurrency int) error {
 
 				env = append(env, KeyValuePair{CcPluginDefinition, manifest.PluginDefinition}) //@TODO do we need this?
 
+				//finally add any additional event vars
+				env.Merge(&event.AdditionalEventEnvVars)
+
 				jobID := uuid.New()
 				job := Job{
 					ID:         jobID,
@@ -162,6 +162,12 @@ func (cc *CloudCompute) RunParallel(concurrency int) error {
 				event.submissionIdMap[manifest.ManifestID] = *job.SubmittedJob.JobId
 			}
 		})
+
+		//if this was the last event, break out of the event loop
+		if !hasNext {
+			break
+		}
+
 	} //end of event loop
 	cr.Wait()
 	return nil
@@ -308,6 +314,8 @@ type Event struct {
 
 	//map of cloud compute job identifier (manifest id) to submitted job identifier (VendorID) in the compute provider
 	submissionIdMap map[uuid.UUID]string
+
+	AdditionalEventEnvVars KeyValuePairs
 }
 
 // Adds a manifest to the Event
