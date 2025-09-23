@@ -33,13 +33,16 @@ type EventGenerator interface {
 }
 
 type StreamingEventGenerator struct {
-	event   Event
-	scanner *bufio.Scanner
-	index   int
-	mu      sync.Mutex
+	event          Event
+	scanner        *bufio.Scanner
+	index          int
+	mu             sync.Mutex
+	perEventLooper *PerEventLooper
+	hasNext        bool
+	eventId        string
 }
 
-func NewStreamingEventGeneratorForReader(event Event, reader io.Reader, delimiter string) (*StreamingEventGenerator, error) {
+func NewStreamingEventGeneratorForReader(event Event, perEventLoopData []map[string]string, reader io.Reader, delimiter string) (*StreamingEventGenerator, error) {
 	scanner := bufio.NewScanner(reader)
 	scanner.Split(splitAt(delimiter))
 	manifestCount := len(event.Manifests)
@@ -49,13 +52,22 @@ func NewStreamingEventGeneratorForReader(event Event, reader io.Reader, delimite
 			return nil, fmt.Errorf("failed to write payload for manifest %s: %s", event.Manifests[i].ManifestID, err)
 		}
 	}
-	return &StreamingEventGenerator{
-		event:   event,
-		scanner: scanner,
-	}, nil
+
+	perEventLooper := NewPerEventLooper(perEventLoopData)
+
+	seg := &StreamingEventGenerator{
+		event:          event,
+		scanner:        scanner,
+		perEventLooper: perEventLooper,
+	}
+
+	seg.hasNext = seg.scanner.Scan()
+	seg.eventId = seg.scanner.Text()
+
+	return seg, nil
 }
 
-func NewStreamingEventGenerator(event Event, scanner *bufio.Scanner) (*StreamingEventGenerator, error) {
+func NewStreamingEventGenerator(event Event, perEventLoopData []map[string]string, scanner *bufio.Scanner) (*StreamingEventGenerator, error) {
 	manifestCount := len(event.Manifests)
 	for i := 0; i < manifestCount; i++ {
 		err := event.Manifests[i].WritePayload()
@@ -63,31 +75,75 @@ func NewStreamingEventGenerator(event Event, scanner *bufio.Scanner) (*Streaming
 			return nil, fmt.Errorf("failed to write payload for manifest %s: %s", event.Manifests[i].ManifestID, err)
 		}
 	}
-	return &StreamingEventGenerator{
-		event:   event,
-		scanner: scanner,
-	}, nil
+
+	perEventLooper := NewPerEventLooper(perEventLoopData)
+
+	seg := &StreamingEventGenerator{
+		event:          event,
+		scanner:        scanner,
+		perEventLooper: perEventLooper,
+	}
+
+	seg.hasNext = seg.scanner.Scan()
+	seg.eventId = seg.scanner.Text()
+
+	return seg, nil
 }
 
-// func (seg *StreamingEventGenerator) HasNextEvent() bool {
-// 	seg.mu.Lock()
-// 	defer seg.mu.Unlock()
-// 	return seg.scanner.Scan()
-// }
+/*
+ lock the method
+  if eventlooper
+    get vars and increment boolean
+	add vars the event
+
+
+*/
+
+func (seg *StreamingEventGenerator) scanNext() {
+	seg.hasNext = seg.scanner.Scan()
+	seg.eventId = seg.scanner.Text()
+	seg.index++
+}
 
 func (seg *StreamingEventGenerator) NextEvent() (Event, bool, error) {
 	seg.mu.Lock()
 	defer seg.mu.Unlock()
-	hasNext := seg.scanner.Scan()
+
 	event := seg.event
-	eventId := seg.scanner.Text()
-	if eventId == "" {
-		return event, hasNext, fmt.Errorf("empty event identifier at index: %d", seg.index)
+	if seg.eventId == "" {
+		seg.scanNext()
+		return event, seg.hasNext, fmt.Errorf("empty event identifier at index: %d", seg.index)
+	} else {
+		var additionalEnvVars map[string]string
+		incrementEvent := true
+
+		if seg.perEventLooper != nil {
+			additionalEnvVars, incrementEvent = seg.perEventLooper.Next()
+			event.AdditionalEventEnvVars = MapToKeyValuePairs(additionalEnvVars)
+		}
+		event.EventIdentifier = seg.eventId
+
+		//read next if we have exhausted the perEventLoop arrray:
+		if incrementEvent {
+			seg.scanNext()
+		}
+		return event, seg.hasNext, nil
 	}
-	seg.index++
-	event.EventIdentifier = eventId
-	return event, hasNext, nil
 }
+
+// func (seg *StreamingEventGenerator) NextEvent() (Event, bool, error) {
+// 	seg.mu.Lock()
+// 	defer seg.mu.Unlock()
+// 	hasNext := seg.scanner.Scan()
+// 	event := seg.event
+// 	eventId := seg.scanner.Text()
+// 	if eventId == "" {
+// 		return event, hasNext, fmt.Errorf("empty event identifier at index: %d", seg.index)
+// 	}
+// 	seg.index++
+// 	event.EventIdentifier = eventId
+// 	return event, hasNext, nil
+// }
 
 //--------------------------------------------
 //--------------------------------------------
