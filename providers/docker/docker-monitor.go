@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/docker/docker/api/types/container"
+	"github.com/docker/docker/pkg/stdcopy"
 	"github.com/google/uuid"
 )
 
@@ -53,36 +54,25 @@ func NewDockerRunMonitor(dr *DockerJobRunner, containerId string) *DockerRunMoni
 	return drm
 }
 
-// shuts down on EOR or Read error
 func (drm *DockerRunMonitor) startLogMonitor() {
 	fmt.Println("STARTING MONITOR FOR: " + drm.containerId)
 	go func(containerId string) {
+		defer drm.wg.Done()
 
-		buffer := make([]byte, 1024)
+		// Create custom writer that wraps the original stdout
+		customWriter := &DockerMonitorWriter{jobId: drm.dr.djob.Job.ID}
 
-		for {
-			//fmt.Println(">>>>>>>>>>>>>>>>>>>>>> TRYING TO READ " + drm.dr.djob.Job.ID.String() + " >>>>>>>>>>>>>>>>>>>>>>>>>>>>>")
-			n, err := drm.logreader.Read(buffer)
-			//fmt.Println(">>>>>>>>>>>>>>>>>>>>>> FINISHED READ " + drm.dr.djob.Job.ID.String() + " >>>>>>>>>>>>>>>>>>>>>>>>>>>>>")
-			if err != nil {
-				if err == io.EOF {
-					//fmt.Println(">>>>>>>>>>>>>>>>>>>>>> EOF CLOSE " + drm.dr.djob.Job.ID.String() + " >>>>>>>>>>>>>>>>>>>>>>>>>>>>>")
-					//fmt.Printf("Size of Buffer: %d\n", n)
-					if n > 0 {
-						writeToStdOut(buffer[:n], drm.dr.djob.Job.ID)
-					}
-					drm.dr.djob.Status = Succeeded
-					drm.wg.Done()
-					log.Printf("JOB: %s: EOF detected, shutting down log monitor\n", drm.dr.djob.Job.ID.String())
-					return
-				}
-				//fmt.Println(">>>>>>>>>>>>>>>>>>>>>> FAIL CLOSE " + drm.dr.djob.Job.ID.String() + " >>>>>>>>>>>>>>>>>>>>>>>>>>>>>")
-				drm.dr.djob.Status = Failed
-				drm.wg.Done()
-				log.Printf("JOB: %s: Unexpected read error, shutting down log monitor: %s\n", drm.dr.djob.Job.ID.String(), err)
+		// Use stdcopy to properly handle multiplexed output
+		_, err := stdcopy.StdCopy(customWriter, customWriter, drm.logreader)
+		if err != nil {
+			if err == io.EOF {
+				log.Printf("JOB: %s: EOF detected, shutting down log monitor\n", drm.dr.djob.Job.ID.String())
+				drm.dr.djob.Status = Succeeded
 				return
 			}
-			writeToStdOut(buffer[:n], drm.dr.djob.Job.ID)
+			drm.dr.djob.Status = Failed
+			log.Printf("JOB: %s: Unexpected read error, shutting down log monitor: %s\n", drm.dr.djob.Job.ID.String(), err)
+			return
 		}
 	}(drm.containerId)
 }
@@ -90,24 +80,29 @@ func (drm *DockerRunMonitor) startLogMonitor() {
 func (drm *DockerRunMonitor) startContainerMonitor() {
 
 	go func(containerId string) {
-		containerJSON, err := drm.dr.client.ContainerInspect(ctx, containerId)
-		if err != nil {
-			drm.dr.djob.Status = Failed
-			log.Printf("JOB: %s: Shutting down container monitor. Error inspecting container.: %s\n", drm.dr.djob.Job.ID.String(), err)
-			drm.closeLogReader()
-			return
-		}
-
-		if !containerJSON.State.Running {
-			if containerJSON.State.ExitCode == 1 {
+		for {
+			containerJSON, err := drm.dr.client.ContainerInspect(ctx, containerId)
+			if err != nil {
 				drm.dr.djob.Status = Failed
+				log.Printf("JOB: %s: Shutting down container monitor. Error inspecting container.: %s\n", drm.dr.djob.Job.ID.String(), err)
+				drm.closeLogReader()
+				return
 			}
 
-			//wait 500ms to flush logs..then close
+			if !containerJSON.State.Running {
+				if containerJSON.State.ExitCode == 1 {
+					drm.dr.djob.Status = Failed
+				} else {
+					drm.dr.djob.Status = Succeeded
+				}
+
+				//wait 500ms to flush logs..then close
+				time.Sleep(500 * time.Millisecond)
+				drm.closeLogReader()
+				log.Printf("JOB: %s: Shutting down container monitor. Container is no longer running.\n", drm.dr.djob.Job.ID.String())
+				return
+			}
 			time.Sleep(500 * time.Millisecond)
-			drm.closeLogReader()
-			log.Printf("JOB: %s: Shutting down container monitor. Container is no longer running.\n", drm.dr.djob.Job.ID.String())
-			return
 		}
 	}(drm.containerId)
 }
@@ -127,11 +122,17 @@ func (drm *DockerRunMonitor) Wait() {
 	drm.closeLogReader()
 }
 
-func writeToStdOut(buffer []byte, jobId uuid.UUID) {
+// Custom writer that formats output with job ID
+type DockerMonitorWriter struct {
+	jobId uuid.UUID
+}
+
+func (cw *DockerMonitorWriter) Write(p []byte) (n int, err error) {
+	// Process the buffer to handle newlines properly
 	line := []byte{}
-	for _, b := range buffer {
+	for _, b := range p {
 		if b == '\n' {
-			pl := fmt.Sprintf("JOB: %s: %s\n", jobId, line)
+			pl := fmt.Sprintf("JOB: %s: %s\n", cw.jobId, line)
 			os.Stdout.WriteString(pl)
 			line = line[:0]
 		} else {
@@ -139,9 +140,11 @@ func writeToStdOut(buffer []byte, jobId uuid.UUID) {
 		}
 	}
 
-	//flush any remaining text
+	// Flush any remaining text
 	if len(line) > 0 {
-		pl := fmt.Sprintf("JOB: %s: %s\n", jobId, line)
+		pl := fmt.Sprintf("JOB: %s: %s\n", cw.jobId, line)
 		os.Stdout.WriteString(pl)
 	}
+
+	return len(p), nil
 }
