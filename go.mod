@@ -16,6 +16,7 @@ require (
 	github.com/aws/aws-sdk-go-v2/service/cloudwatchlogs v1.35.7
 	github.com/docker/docker v28.0.1+incompatible
 	github.com/google/uuid v1.6.0
+	github.com/usace-cloud-compute/cc-go-sdk v0.0.0-20251028200929-467ec9a1f90f
 	k8s.io/api v0.33.3
 	k8s.io/apimachinery v0.33.3
 	k8s.io/client-go v0.33.3
@@ -74,8 +75,7 @@ require (
 	github.com/pkg/errors v0.9.1 // indirect
 	github.com/spf13/cast v1.6.0 // indirect
 	github.com/spf13/pflag v1.0.5 // indirect
-	github.com/usace-cloud-compute/cc-go-sdk v0.0.0-20251028155143-c382f7ed3058 // indirect
-	github.com/usace/filesapi v0.0.0-20250320132414-61c781325b9a // indirect
+	github.com/usace-cloud-compute/filesapi v0.0.0-20251028183744-20a294ce41f9 // indirect
 	github.com/wk8/go-ordered-map/v2 v2.1.8 // indirect
 	github.com/x448/float16 v0.8.4 // indirect
 	go.opentelemetry.io/auto/sdk v1.1.0 // indirect
