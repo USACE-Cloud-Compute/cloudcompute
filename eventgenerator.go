@@ -13,7 +13,7 @@ import (
 
 	"dario.cat/mergo"
 	"github.com/google/uuid"
-	. "github.com/usace/cc-go-sdk"
+	. "github.com/usace-cloud-compute/cc-go-sdk"
 )
 
 // EventGenerators provide an iterator type interface to work with sets of events for a Compute.
@@ -186,6 +186,7 @@ func (pel *PerEventLooper) Next() (envVars map[string]string, incrementEvent boo
 //--------------------------------------------
 //--------------------------------------------
 //--------------------------------------------
+
 //--------------------------------------------
 //--------------------------------------------
 //--------------------------------------------
@@ -255,85 +256,6 @@ func (aeg *ArrayEventGenerator) NextEvent() (Event, bool, error) {
 
 }
 
-//--------------------------------------------
-//--------------------------------------------
-//--------------------------------------------
-//--------------------------------------------
-//--------------------------------------------
-//--------------------------------------------
-//--------------------------------------------
-//--------------------------------------------
-//--------------------------------------------
-
-// Determines if all of the events have been enumerated
-// func (el *EventList) HasNextEvent() bool {
-// 	el.mu.Lock()
-// 	defer el.mu.Unlock()
-// 	el.currentEvent++
-// 	return el.currentEvent < len(el.events)
-// }
-
-//--------------------------------------------
-//--------------------------------------------
-//--------------------------------------------
-//--------------------------------------------
-//--------------------------------------------
-//--------------------------------------------
-//--------------------------------------------
-//--------------------------------------------
-
-// type ArrayEventGenerator struct {
-// 	event    Event
-// 	end      int64
-// 	position int64
-// 	mu       sync.Mutex
-// }
-
-// func NewArrayEventGenerator(event Event, junk []map[string]string, start int64, end int64) (*ArrayEventGenerator, error) {
-// 	manifestCount := len(event.Manifests)
-
-// 	//order the set of manifests
-// 	//@TODO...need to order all event generator manifest sets!!!
-// 	if manifestCount > 1 {
-// 		orderedIds, err := event.TopoSort()
-// 		if err != nil {
-// 			log.Printf("Unable to order event %s: %s\n", event.ID, err)
-// 		}
-// 		orderedManifests := make([]ComputeManifest, len(event.Manifests))
-// 		for i, oid := range orderedIds {
-// 			orderedManifests[i], err = getManifest(event.Manifests, oid)
-// 			if err != nil {
-// 				log.Printf("Unable to order event %s: %s\n", event.ID, err)
-// 			}
-// 		}
-// 		event.Manifests = orderedManifests
-// 	}
-
-// 	for i := 0; i < manifestCount; i++ {
-// 		err := event.Manifests[i].WritePayload()
-// 		if err != nil {
-// 			return nil, fmt.Errorf("failed to write payload for manifest %s: %s", event.Manifests[i].ManifestID, err)
-// 		}
-// 	}
-// 	return &ArrayEventGenerator{
-// 		event:    event,
-// 		position: start,
-// 		end:      end,
-// 	}, nil
-// }
-
-// func (aeg *ArrayEventGenerator) NextEvent() (Event, bool, error) {
-// 	aeg.mu.Lock()
-// 	defer aeg.mu.Unlock()
-// 	event := aeg.event
-// 	event.EventIdentifier = strconv.Itoa(int(aeg.position))
-// 	hasNext := aeg.position <= aeg.end
-// 	aeg.position++
-// 	return event, hasNext, nil
-// }
-
-//@TODO: Could optimize the sorting an instead of returning a list of ordered IDs, return a sorted list of manifests.....
-
 // EventList is an EventGenerator composed of a slice of events.
 // Events are enumerated in the order they were placed in the slice.
 type EventList struct {
@@ -368,6 +290,7 @@ func (el *EventList) NextEvent() (Event, bool, error) {
 	return event, hasNext, nil
 }
 
+// @TODO change this to TemplatedEvent?  maybe just delete?
 type BatchEvent struct {
 	EventIdentifier   string          `json:"eventIdentifier"`
 	ManifestOverrides ComputeManifest `json:"manifest"`

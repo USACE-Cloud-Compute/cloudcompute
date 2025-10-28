@@ -6,7 +6,7 @@ import (
 	"strings"
 	"time"
 
-	. "github.com/usace/cloudcompute"
+	. "github.com/usace-cloud-compute/cloudcompute"
 )
 
 type JobStatus string

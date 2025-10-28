@@ -12,7 +12,7 @@ import (
 	"github.com/docker/docker/api/types/image"
 	"github.com/docker/docker/api/types/mount"
 	"github.com/docker/docker/client"
-	. "github.com/usace/cloudcompute"
+	. "github.com/usace-cloud-compute/cloudcompute"
 )
 
 const (

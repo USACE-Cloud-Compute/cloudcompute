@@ -3,7 +3,7 @@ package cloudcompute
 import (
 	"fmt"
 
-	. "github.com/usace/cloudcompute"
+	. "github.com/usace-cloud-compute/cloudcompute"
 )
 
 type PluginRegistry interface {

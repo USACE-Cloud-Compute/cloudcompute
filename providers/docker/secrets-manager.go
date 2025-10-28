@@ -3,7 +3,7 @@ package cloudcompute
 import (
 	"os"
 
-	. "github.com/usace/cloudcompute"
+	. "github.com/usace-cloud-compute/cloudcompute"
 )
 
 type SecretsManager interface {

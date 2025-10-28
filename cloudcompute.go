@@ -6,8 +6,8 @@ import (
 	"log"
 	"strings"
 
-	. "github.com/usace/cc-go-sdk"
-	"github.com/usace/cloudcompute/utils"
+	. "github.com/usace-cloud-compute/cc-go-sdk"
+	"github.com/usace-cloud-compute/cloudcompute/utils"
 
 	"github.com/google/uuid"
 )

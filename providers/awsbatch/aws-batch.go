@@ -13,8 +13,8 @@ import (
 	"github.com/aws/aws-sdk-go-v2/service/batch"
 	"github.com/aws/aws-sdk-go-v2/service/batch/types"
 	"github.com/aws/aws-sdk-go-v2/service/cloudwatchlogs"
-	. "github.com/usace/cc-go-sdk"
-	. "github.com/usace/cloudcompute"
+	. "github.com/usace-cloud-compute/cc-go-sdk"
+	. "github.com/usace-cloud-compute/cloudcompute"
 )
 
 var awsLogGroup string = "/aws/batch/job"

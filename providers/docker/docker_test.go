@@ -10,7 +10,7 @@ import (
 
 	"github.com/google/uuid"
 
-	. "github.com/usace/cloudcompute"
+	. "github.com/usace-cloud-compute/cloudcompute"
 )
 
 func TestDockerConcurrency(t *testing.T) {
