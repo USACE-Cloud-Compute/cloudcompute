@@ -98,7 +98,7 @@ func (cc *CloudCompute) RunParallel(concurrency int) error {
 			event.submissionIdMap = make(map[uuid.UUID]string) //reduce the scope of the idmap to a single event
 
 			for _, manifest := range event.Manifests {
-				if len(manifest.Inputs.PayloadAttributes) > 0 || len(manifest.Inputs.DataSources) > 0 || len(manifest.Actions) > 0 {
+				if len(manifest.Inputs.PayloadAttributes) > 0 || len(manifest.Inputs.DataSources) > 0 || len(manifest.Actions) > 0 { //@TODO...ADD OUTPUT DATA SOURCES
 					err := manifest.WritePayload() //guarantees the payload is written to the manifest
 					if err != nil {
 						log.Printf("error writing payload for event %s: %s:\n", event.EventIdentifier, err)
