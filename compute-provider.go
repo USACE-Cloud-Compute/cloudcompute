@@ -194,6 +194,17 @@ type JobsSummaryQuery struct {
 	JobSummaryFunction JobSummaryFunction
 }
 
+///////////////////
+
+type JobsLogQuery struct {
+	QueryLevel       string
+	QueryValue       JobNameParts
+	MatchValue       string //regex to match and only print matching lines
+	JsScriptFunction any
+}
+
+/////////////////
+
 type JobNameParts struct {
 	Compute string
 	Event   string

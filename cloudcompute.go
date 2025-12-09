@@ -439,3 +439,7 @@ func (cr *ConcurrentRunner) Wait() {
 		cr.semaphore <- struct{}{}
 	}
 }
+
+func (cr *ConcurrentRunner) RunSequential(cf func()) {
+	cf()
+}

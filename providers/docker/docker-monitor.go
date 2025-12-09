@@ -38,7 +38,6 @@ func NewDockerRunMonitor(dr *DockerJobRunner, containerId string) *DockerRunMoni
 		log.Printf("JOB: %s: Error creating docker run monitor: %s\n", dr.djob.Job.ID.String(), err)
 		dr.djob.Status = Failed
 		return nil
-		//drm.wg.Done()
 	}
 
 	drm := &DockerRunMonitor{
@@ -80,29 +79,30 @@ func (drm *DockerRunMonitor) startLogMonitor() {
 func (drm *DockerRunMonitor) startContainerMonitor() {
 
 	go func(containerId string) {
-		for {
-			containerJSON, err := drm.dr.client.ContainerInspect(ctx, containerId)
+
+		statusCh, errCh := drm.dr.client.ContainerWait(ctx, containerId, container.WaitConditionNotRunning)
+
+		var statusCode int64
+
+		select {
+		case err := <-errCh:
 			if err != nil {
 				drm.dr.djob.Status = Failed
 				log.Printf("JOB: %s: Shutting down container monitor. Error inspecting container.: %s\n", drm.dr.djob.Job.ID.String(), err)
 				drm.closeLogReader()
 				return
 			}
-
-			if !containerJSON.State.Running {
-				if containerJSON.State.ExitCode == 1 {
-					drm.dr.djob.Status = Failed
-				} else {
-					drm.dr.djob.Status = Succeeded
-				}
-
-				//wait 500ms to flush logs..then close
-				time.Sleep(500 * time.Millisecond)
-				drm.closeLogReader()
-				log.Printf("JOB: %s: Shutting down container monitor. Container is no longer running.\n", drm.dr.djob.Job.ID.String())
-				return
+		case status := <-statusCh:
+			statusCode = status.StatusCode
+			switch statusCode {
+			case 0:
+				drm.dr.djob.Status = Succeeded
+			default:
+				drm.dr.djob.Status = Failed
 			}
 			time.Sleep(500 * time.Millisecond)
+			drm.closeLogReader()
+			log.Printf("JOB: %s: Shutting down container monitor. Container is no longer running.\n", drm.dr.djob.Job.ID.String())
 		}
 	}(drm.containerId)
 }

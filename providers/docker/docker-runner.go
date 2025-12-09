@@ -111,10 +111,8 @@ func (dr *DockerJobRunner) Run() error {
 		dr.djob.Status = Failed
 		return err
 	}
-
 	drm := NewDockerRunMonitor(dr, resp.ID)
 	drm.Wait()
-
 	return nil
 }
 
