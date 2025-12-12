@@ -9,6 +9,7 @@ import (
 	"log"
 	"reflect"
 	"strconv"
+	"strings"
 	"sync"
 
 	"dario.cat/mergo"
@@ -45,13 +46,6 @@ type StreamingEventGenerator struct {
 func NewStreamingEventGeneratorForReader(event Event, perEventLoopData []map[string]string, reader io.Reader, delimiter string) (*StreamingEventGenerator, error) {
 	scanner := bufio.NewScanner(reader)
 	scanner.Split(splitAt(delimiter))
-	manifestCount := len(event.Manifests)
-	for i := 0; i < manifestCount; i++ {
-		err := event.Manifests[i].WritePayload()
-		if err != nil {
-			return nil, fmt.Errorf("failed to write payload for manifest %s: %s", event.Manifests[i].ManifestID, err)
-		}
-	}
 
 	perEventLooper := NewPerEventLooper(perEventLoopData)
 
@@ -62,8 +56,7 @@ func NewStreamingEventGeneratorForReader(event Event, perEventLoopData []map[str
 	}
 
 	seg.hasNext = seg.scanner.Scan()
-	seg.eventId = seg.scanner.Text()
-
+	seg.eventId = strings.TrimSpace(seg.scanner.Text())
 	return seg, nil
 }
 
@@ -85,23 +78,14 @@ func NewStreamingEventGenerator(event Event, perEventLoopData []map[string]strin
 	}
 
 	seg.hasNext = seg.scanner.Scan()
-	seg.eventId = seg.scanner.Text()
+	seg.eventId = strings.TrimSpace(seg.scanner.Text())
 
 	return seg, nil
 }
 
-/*
- lock the method
-  if eventlooper
-    get vars and increment boolean
-	add vars the event
-
-
-*/
-
 func (seg *StreamingEventGenerator) scanNext() {
 	seg.hasNext = seg.scanner.Scan()
-	seg.eventId = seg.scanner.Text()
+	seg.eventId = strings.TrimSpace(seg.scanner.Text())
 	seg.index++
 }
 
@@ -130,20 +114,6 @@ func (seg *StreamingEventGenerator) NextEvent() (Event, bool, error) {
 		return event, seg.hasNext, nil
 	}
 }
-
-// func (seg *StreamingEventGenerator) NextEvent() (Event, bool, error) {
-// 	seg.mu.Lock()
-// 	defer seg.mu.Unlock()
-// 	hasNext := seg.scanner.Scan()
-// 	event := seg.event
-// 	eventId := seg.scanner.Text()
-// 	if eventId == "" {
-// 		return event, hasNext, fmt.Errorf("empty event identifier at index: %d", seg.index)
-// 	}
-// 	seg.index++
-// 	event.EventIdentifier = eventId
-// 	return event, hasNext, nil
-// }
 
 //--------------------------------------------
 //--------------------------------------------
@@ -219,12 +189,12 @@ func NewArrayEventGenerator(event Event, perEventLoopData []map[string]string, s
 		event.Manifests = orderedManifests
 	}
 
-	for i := 0; i < manifestCount; i++ {
-		err := event.Manifests[i].WritePayload()
-		if err != nil {
-			return nil, fmt.Errorf("failed to write payload for manifest %s: %s", event.Manifests[i].ManifestID, err)
-		}
-	}
+	// for i := 0; i < manifestCount; i++ {
+	// 	err := event.Manifests[i].WritePayload()
+	// 	if err != nil {
+	// 		return nil, fmt.Errorf("failed to write payload for manifest %s: %s", event.Manifests[i].ManifestID, err)
+	// 	}
+	// }
 
 	perEventLooper := NewPerEventLooper(perEventLoopData)
 
@@ -403,7 +373,7 @@ func getManifest(manifests []ComputeManifest, id uuid.UUID) (ComputeManifest, er
 			return m, nil
 		}
 	}
-	return ComputeManifest{}, errors.New("Unable to find Manifest in list")
+	return ComputeManifest{}, errors.New("unable to find manifest in list")
 }
 
 func splitAt(substring string) func(data []byte, atEOF bool) (advance int, token []byte, err error) {
