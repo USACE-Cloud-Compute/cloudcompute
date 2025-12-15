@@ -7,6 +7,10 @@ import (
 	. "github.com/usace-cloud-compute/cloudcompute"
 )
 
+type DockerPullProgressFactory interface {
+	New() DockerPullProgress
+}
+
 type DockerComputeProvider struct {
 	manager  *DockerComputeManager
 	registry PluginRegistry
@@ -27,12 +31,16 @@ type DockerComputeProviderConfig struct {
 
 	//optional in memory secrets manager if a secrets mock is necessary
 	SecretsManager SecretsManager
+
+	//docker pull progress ui instance generator
+	DockerPullProgressFactory DockerPullProgressFactory
 }
 
 // NewDockerComputeProvider creates a new DockerComputeProvider based on the given configuration.
 func NewDockerComputeProvider(config DockerComputeProviderConfig) *DockerComputeProvider {
 	dcm := NewDockerComputeManager(DockerComputeManagerConfig{
-		Concurrency: config.Concurrency,
+		Concurrency:               config.Concurrency,
+		DockerPullProgressFactory: config.DockerPullProgressFactory,
 	})
 	if config.StartMonitor > 0 {
 		dcm.StartMonitor(config.StartMonitor, config.MonitorFunction)

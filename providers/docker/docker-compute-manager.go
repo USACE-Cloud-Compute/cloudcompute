@@ -35,16 +35,18 @@ type DockerJob struct {
 type MonitorFunction func(statuses map[JobStatus]int)
 
 type DockerComputeManagerConfig struct {
-	Concurrency int
+	Concurrency               int
+	DockerPullProgressFactory DockerPullProgressFactory
 }
 
 type DockerComputeManager struct {
 	//wg          *sync.WaitGroup
-	concurrency int
-	queue       JobQueue
-	queueEvents chan string
-	control     chan struct{}
-	limiter     chan struct{}
+	concurrency               int
+	queue                     JobQueue
+	queueEvents               chan string
+	control                   chan struct{}
+	limiter                   chan struct{}
+	dockerPullProgressFactory DockerPullProgressFactory
 }
 
 func NewDockerComputeManager(config DockerComputeManagerConfig) *DockerComputeManager {
@@ -54,11 +56,12 @@ func NewDockerComputeManager(config DockerComputeManagerConfig) *DockerComputeMa
 	}
 
 	dcm := DockerComputeManager{
-		queue:       NewInMemoryJobQueue(),
-		concurrency: config.Concurrency,
-		queueEvents: make(chan string),
-		control:     make(chan struct{}),
-		limiter:     make(chan struct{}, config.Concurrency),
+		queue:                     NewInMemoryJobQueue(),
+		concurrency:               config.Concurrency,
+		queueEvents:               make(chan string),
+		control:                   make(chan struct{}),
+		limiter:                   make(chan struct{}, config.Concurrency),
+		dockerPullProgressFactory: config.DockerPullProgressFactory,
 	}
 	//start the runner
 	go dcm.runner()
@@ -89,11 +92,18 @@ func (dcm *DockerComputeManager) runner() {
 					dcm.queueEvents <- fmt.Sprintf("FINISHED JOB: %s", dockerJob.Job.ID)
 				}()
 				//dockerJob.Status = Starting
-				runner, err := NewRunner(dockerJob)
+				runner, err := NewRunner(dockerJob) //where we get pull progress bars
 				if err != nil {
 					dockerJob.Status = Failed
 				}
-				dockerJob.runner = runner //create a reference in the docker job for termination
+
+				//get the docker pull progress function if it exists
+				if dcm.dockerPullProgressFactory != nil {
+					runner.dpp = dcm.dockerPullProgressFactory.New()
+				}
+
+				//create a reference in the docker job for termination
+				dockerJob.runner = runner
 				defer runner.Close()
 
 				err = runner.Run()

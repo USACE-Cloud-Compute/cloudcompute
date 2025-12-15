@@ -55,7 +55,16 @@ func (jq *InMemoryJobQueue) Jobs(statuses ...JobStatus) []*DockerJob {
 
 func (jq *InMemoryJobQueue) UpdateJobs() []uuid.UUID {
 	pendingThatCanStart := []uuid.UUID{}
+
+	// First, collect all jobs that need status updates
+	jobsToUpdate := make([]*DockerJob, 0, len(jq.queue))
+	jq.Lock()
 	for _, job := range jq.queue {
+		jobsToUpdate = append(jobsToUpdate, job)
+	}
+	jq.Unlock()
+
+	for _, job := range jobsToUpdate {
 		depCount := len(job.Job.DependsOn)
 		if depCount == 0 && job.Status == Submitted {
 			job.Status = Runnable
@@ -112,6 +121,9 @@ func (jq *InMemoryJobQueue) getJobs(jobids []string) []*DockerJob {
 }
 
 func (jq *InMemoryJobQueue) getJobDeps(jobids []string) JobDeps {
+	jq.Lock()
+	defer jq.Unlock()
+
 	jobs := make([]*DockerJob, len(jobids))
 	for i, ids := range jobids {
 		for _, job := range jq.queue {

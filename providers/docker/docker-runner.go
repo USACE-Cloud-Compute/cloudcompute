@@ -7,21 +7,23 @@ import (
 	"io"
 	"log"
 	"strconv"
-	"sync"
 
 	"github.com/docker/docker/api/types/container"
 	"github.com/docker/docker/api/types/image"
 	"github.com/docker/docker/api/types/mount"
 	"github.com/docker/docker/client"
 	. "github.com/usace-cloud-compute/cloudcompute"
-	"github.com/vbauerster/mpb/v8"
-	"github.com/vbauerster/mpb/v8/decor"
 )
 
 const (
 	nanocpu  int64 = 1e9
 	mbToByte int64 = 1024 * 1024
 )
+
+type DockerPullProgress interface {
+	Update(msg DockerEvent)
+	Close()
+}
 
 type DockerEvent struct {
 	ID             string `json:"id"`
@@ -129,7 +131,6 @@ func (dr *DockerJobRunner) imagePull() error {
 			return err
 		}
 		defer reader.Close()
-		dr.dpp = NewDockerPullProgress()
 		decoder := json.NewDecoder(reader)
 
 		var event DockerEvent
@@ -147,96 +148,6 @@ func (dr *DockerJobRunner) imagePull() error {
 		}
 		if dr.dpp != nil {
 			dr.dpp.Close()
-		}
-
-	}
-	return nil
-}
-
-type DockerPullProgress interface {
-	Update(msg DockerEvent)
-	Close()
-}
-
-type CliDockerPullProgress struct {
-	mu   sync.Mutex
-	p    *mpb.Progress
-	bars map[string]*mpb.Bar
-}
-
-func NewDockerPullProgress() *CliDockerPullProgress {
-	//progress function
-
-	p := mpb.New(
-		mpb.WithWidth(64),
-		mpb.WithWaitGroup(&sync.WaitGroup{}), // Use a WaitGroup for proper synchronization
-	)
-
-	bars := make(map[string]*mpb.Bar)
-
-	return &CliDockerPullProgress{
-		p:    p,
-		bars: bars,
-	}
-}
-
-func (dpp *CliDockerPullProgress) Close() {
-	dpp.p.Wait()
-}
-
-func (dpp *CliDockerPullProgress) Update(msg DockerEvent) {
-	// We only care about messages with a layer ID
-	if msg.ID == "" {
-		return
-	}
-
-	dpp.mu.Lock()
-	bar, ok := dpp.bars[msg.ID]
-	if !ok && msg.ProgressDetail.Total > 0 {
-		bar = dpp.p.New(
-			msg.ProgressDetail.Total,
-			mpb.BarStyle().Lbound("[").Filler("=").Tip(">").Padding("-").Rbound("]"),
-			mpb.PrependDecorators(
-				decor.Name(msg.ID, decor.WC{W: 15, C: decor.DindentRight}),
-				decor.Name(msg.Status, decor.WC{W: 20, C: decor.DindentRight}),
-				decor.CountersKibiByte("% .2f / % .2f"),
-			),
-			mpb.AppendDecorators(
-				decor.Percentage(),
-			),
-		)
-		dpp.bars[msg.ID] = bar
-	} else if ok {
-		if msg.ProgressDetail.Total > 0 {
-			bar.SetTotal(msg.ProgressDetail.Total, false)
-		}
-
-		if msg.ProgressDetail.Current > 0 {
-			bar.SetCurrent(msg.ProgressDetail.Current)
-		}
-	}
-	dpp.mu.Unlock()
-}
-
-func (dr *DockerJobRunner) imagePullOld() error {
-	if !dr.isLocalImage() {
-		log.Printf("Image: %s not found on local system.  Pulling from the remote address.\n", dr.djob.Plugin.ImageAndTag)
-		reader, err := dr.client.ImagePull(ctx, dr.djob.Plugin.ImageAndTag, image.PullOptions{})
-		if err != nil {
-			return err
-		}
-		decoder := json.NewDecoder(reader)
-
-		var event DockerEvent
-
-		for {
-			if err := decoder.Decode(&event); err != nil {
-				if err == io.EOF {
-					break
-				}
-				return err
-			}
-			fmt.Println(event)
 		}
 
 	}
