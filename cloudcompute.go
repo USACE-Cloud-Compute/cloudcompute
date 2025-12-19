@@ -354,15 +354,15 @@ type Plugin struct {
 	Description        string                   `json:"description" jsonschema:"title=Description"`
 	Command            []string                 `json:"command" jsonschema:"title=Command,description=The docker command and arguments to run"`
 	ComputeEnvironment PluginComputeEnvironment `json:"compute_environment" jsonschema:"title=Compute Environment,description=CPU and Memory runtime requirements"`
-	DefaultEnvironment KeyValuePairs            `json:"environment" jsonschema:"title=Default Environment Variables,description=The list of default environment variables"` //default values for the container environment
-	Volumes            []PluginComputeVolumes   `json:"volumes" jsonschema:"title=Volume Mounts,description=Storage volumes that need to be mounted to the plugin when it is run"`
+	DefaultEnvironment KeyValuePairs            `json:"environment" jsonschema:"title=Default Environment Variables,description=The list of default environment variables"`        //default values for the container environment
+	Volumes            []PluginComputeVolumes   `json:"volumes" jsonschema:"title=Volume Mounts,description=Storage volumes that need to be mounted to the plugin when it is run"` //@NOTE: currently not used
 	Credentials        KeyValuePairs            `json:"credentials" jsonschema:"title=Credentials,description=Configures credentials/secrets from the service provider to be injected into the running container.  Note: DO NOT ENTER PASSWORDS OR ACTUAL CREDENTIALS"`
-	Parameters         map[string]string        `json:"parameters" jsonschema:"title=Parameters"`
+	Parameters         map[string]string        `json:"parameters" jsonschema:"title=Parameters"` //@NOTE: currently not being used
 	RetryAttemts       int32                    `json:"retry_attempts" jsonschema:"title=Retry Attempts"`
 	ExecutionTimeout   *int32                   `json:"execution_timeout" jsonschema:"title=Execution Timeout (sec)"`
 	Privileged         bool                     `json:"privileged" jsonschema:"title=Requires Privileged Execution"` //assign container privileged execution.  for example to mount linux devices
 	LinuxParameters    LinuxParameters          `json:"linux_parameters" jsonschema:"title=Linux Parameters"`
-	MountPoints        []MountPoint             `json:"mountpoints" jsonschema:"title=MountPoints"`
+	MountPoints        []MountPoint             `json:"mountpoints" jsonschema:"title=MountPoints"` //@NOTE: currently not being used
 }
 
 type LinuxParameters struct {

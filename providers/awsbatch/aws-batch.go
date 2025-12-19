@@ -1,3 +1,5 @@
+// Package awsbatch provides an implementation of the CloudCompute provider interface
+// for AWS Batch.
 package awsbatch
 
 import (
@@ -17,6 +19,7 @@ import (
 	. "github.com/usace-cloud-compute/cloudcompute"
 )
 
+// awsLogGroup is the CloudWatch log group name used for AWS Batch job logs
 var awsLogGroup string = "/aws/batch/job"
 var ctx context.Context = context.Background()
 
@@ -29,20 +32,30 @@ var ctx context.Context = context.Background()
 		}))
 	}
 */
+
+// AwsBatchProviderInput contains configuration options for creating an AWS Batch provider
 type AwsBatchProviderInput struct {
+	// ExecutionRole is the ARN of the IAM role that AWS Batch will assume to run jobs
 	ExecutionRole string
-	BatchRegion   string
+	// BatchRegion is the AWS region where the Batch service is located
+	BatchRegion string
+	// ConfigProfile is the AWS configuration profile to use (optional)
 	ConfigProfile string
-	Options       []func(o *config.LoadOptions) error
+	// Options are additional AWS configuration options
+	Options []func(o *config.LoadOptions) error
 }
 
-// AWS Batch Compute Provider implementation
+// AwsBatchProvider implements the CloudCompute provider interface for AWS Batch
 type AwsBatchProvider struct {
-	client        *batch.Client
-	logs          *cloudwatchlogs.Client
+	// client is the AWS Batch service client
+	client *batch.Client
+	// logs is the CloudWatch Logs service client for retrieving job logs
+	logs *cloudwatchlogs.Client
+	// executionRole is the IAM role ARN used for job execution
 	executionRole string
 }
 
+// NewAwsBatchProviderInput creates a new AwsBatchProviderInput with default retry configuration
 func NewAwsBatchProviderInput(executionRole string, batchRegion string, configProfile string) AwsBatchProviderInput {
 	return AwsBatchProviderInput{
 		ExecutionRole: executionRole,
@@ -56,6 +69,8 @@ func NewAwsBatchProviderInput(executionRole string, batchRegion string, configPr
 	}
 }
 
+// NewAwsBatchProvider creates a new AWS Batch provider instance
+// It initializes the AWS Batch and CloudWatch Logs clients
 func NewAwsBatchProvider(input AwsBatchProviderInput) (*AwsBatchProvider, error) {
 
 	options := []func(o *config.LoadOptions) error{
@@ -82,6 +97,8 @@ func NewAwsBatchProvider(input AwsBatchProviderInput) (*AwsBatchProvider, error)
 	return &AwsBatchProvider{svc, logs, input.ExecutionRole}, nil
 }
 
+// SubmitJob submits a job to AWS Batch
+// It takes a Job struct and returns an error if submission fails
 func (abp *AwsBatchProvider) SubmitJob(job *Job) error {
 	var retryStrategy *types.RetryStrategy
 	var timeout *types.JobTimeout
@@ -120,6 +137,8 @@ func (abp *AwsBatchProvider) SubmitJob(job *Job) error {
 	return nil
 }
 
+// RegisterPlugin registers a plugin with AWS Batch
+// It creates a job definition for the plugin and returns a PluginRegistrationOutput
 func (abp *AwsBatchProvider) RegisterPlugin(plugin *Plugin) (PluginRegistrationOutput, error) {
 	var timout *types.JobTimeout
 	if plugin.ExecutionTimeout != nil {
@@ -164,6 +183,8 @@ func (abp *AwsBatchProvider) RegisterPlugin(plugin *Plugin) (PluginRegistrationO
 	return pro, err
 }
 
+// UnregisterPlugin removes a plugin from AWS Batch
+// It deregisters the job definition with the given name and revision
 func (abp *AwsBatchProvider) UnregisterPlugin(nameAndRevision string) error {
 	dji := batch.DeregisterJobDefinitionInput{
 		JobDefinition: &nameAndRevision,
@@ -173,7 +194,8 @@ func (abp *AwsBatchProvider) UnregisterPlugin(nameAndRevision string) error {
 	return err
 }
 
-// Terminates jobs submitted to AWS Batch job queues
+// TerminateJobs terminates jobs submitted to AWS Batch job queues
+// It takes a TerminateJobInput and terminates jobs based on the input criteria
 func (abp *AwsBatchProvider) TerminateJobs(input TerminateJobInput) error {
 	jobs := input.VendorJobs
 	if jobs == nil {
@@ -211,7 +233,8 @@ func (abp *AwsBatchProvider) TerminateJobs(input TerminateJobInput) error {
 	return nil
 }
 
-// Terminates everything running in a queue
+// TerminateQueue terminates all jobs in a specific queue
+// It takes a TerminateJobInput and terminates all jobs in the specified queue
 func (abp *AwsBatchProvider) TerminateQueue(input TerminateJobInput) error {
 
 	input.Query.JobSummaryFunction = func(summaries []JobSummary) {
@@ -230,6 +253,8 @@ func (abp *AwsBatchProvider) TerminateQueue(input TerminateJobInput) error {
 	return nil
 }
 
+// terminateJob terminates a specific job
+// It takes the job name, job ID, and reason for termination
 func (abp *AwsBatchProvider) terminateJob(name string, id string, reason string) TerminateJobOutput {
 	tji := batch.TerminateJobInput{
 		JobId:  &id,
@@ -244,6 +269,8 @@ func (abp *AwsBatchProvider) terminateJob(name string, id string, reason string)
 	}
 }
 
+// cancelJob cancels a specific job
+// It takes the job name, job ID, and reason for cancellation
 func (abp *AwsBatchProvider) cancelJob(name string, id string, reason string) TerminateJobOutput {
 	tji := batch.CancelJobInput{
 		JobId:  &id,
@@ -258,9 +285,11 @@ func (abp *AwsBatchProvider) cancelJob(name string, id string, reason string) Te
 	}
 }
 
+// QueueSummary retrieves a summary of all jobs in a specific queue
+// It takes a job queue name and a JobsSummaryQuery to filter results
 func (abp *AwsBatchProvider) QueueSummary(jobQueue string, query JobsSummaryQuery) error {
 	if query.JobSummaryFunction == nil {
-		return errors.New("Missing JubSummaryFunction.  You have no way to process the result.")
+		return errors.New("missing jobsummary function, you have no way to process the result")
 	}
 
 	var nextToken *string
@@ -294,6 +323,8 @@ func (abp *AwsBatchProvider) QueueSummary(jobQueue string, query JobsSummaryQuer
 	return nil
 }
 
+// Status retrieves job status information based on a query
+// It takes a job queue name and a JobsSummaryQuery to filter results
 func (abp *AwsBatchProvider) Status(jobQueue string, query JobsSummaryQuery) error {
 	if query.JobSummaryFunction == nil {
 		return errors.New("missing JubSummaryFunction, you have no way to process the result")
@@ -336,6 +367,8 @@ func (abp *AwsBatchProvider) Status(jobQueue string, query JobsSummaryQuery) err
 	return nil
 }
 
+// JobLog retrieves logs for a specific job
+// It takes a submitted job ID and an optional token for pagination
 // @TODO this assumes the logs are rather short.
 // Need to update for logs that require pagenation in the AWS SDK
 func (abp *AwsBatchProvider) JobLog(submittedJobId string, token *string) (JobLogOutput, error) {
@@ -388,6 +421,8 @@ func (abp *AwsBatchProvider) JobLog(submittedJobId string, token *string) (JobLo
 // 	return abp.client.ListJobs(ctx, &input)
 // }
 
+// describeBatchJobs describes the specified batch jobs
+// It takes a slice of job IDs and returns the job descriptions
 func (abp *AwsBatchProvider) describeBatchJobs(submittedJobIds []string) (*batch.DescribeJobsOutput, error) {
 	input := batch.DescribeJobsInput{
 		Jobs: submittedJobIds,
@@ -395,6 +430,7 @@ func (abp *AwsBatchProvider) describeBatchJobs(submittedJobIds []string) (*batch
 	return abp.client.DescribeJobs(ctx, &input)
 }
 
+// toBatchContainerOverrides converts ContainerOverrides to AWS Batch ContainerOverrides
 func toBatchContainerOverrides(co ContainerOverrides) *types.ContainerOverrides {
 
 	awskvp := make([]types.KeyValuePair, len(co.Environment))
@@ -423,6 +459,7 @@ func toBatchContainerOverrides(co ContainerOverrides) *types.ContainerOverrides 
 	}
 }
 
+// toBatchDependency converts job dependency strings to AWS Batch JobDependency
 func toBatchDependency(jobDependency []string) []types.JobDependency {
 	batchDeps := make([]types.JobDependency, len(jobDependency))
 	for i, d := range jobDependency {
@@ -434,6 +471,7 @@ func toBatchDependency(jobDependency []string) []types.JobDependency {
 	return batchDeps
 }
 
+// listOutput2JobSummary converts AWS Batch ListJobsOutput to JobSummary slice
 func listOutput2JobSummary(output *batch.ListJobsOutput) []JobSummary {
 	js := make([]JobSummary, len(output.JobSummaryList))
 	for i, s := range output.JobSummaryList {
@@ -451,6 +489,7 @@ func listOutput2JobSummary(output *batch.ListJobsOutput) []JobSummary {
 	return js
 }
 
+// kvpToBatchKvp converts KeyValuePair slice to AWS Batch KeyValuePair slice
 func kvpToBatchKvp(kvps []KeyValuePair) []types.KeyValuePair {
 	bkvps := make([]types.KeyValuePair, len(kvps))
 	for i, kvp := range kvps {
@@ -463,6 +502,7 @@ func kvpToBatchKvp(kvps []KeyValuePair) []types.KeyValuePair {
 	return bkvps
 }
 
+// credsToBatchSecrets converts KeyValuePair slice to AWS Batch Secret slice
 func credsToBatchSecrets(creds []KeyValuePair) []types.Secret {
 	secrets := make([]types.Secret, len(creds))
 	for i, s := range creds {
@@ -475,9 +515,10 @@ func credsToBatchSecrets(creds []KeyValuePair) []types.Secret {
 	return secrets
 }
 
+// toBatchLinuxParams converts LinuxParameters to AWS Batch LinuxParameters
 func toBatchLinuxParams(lp *LinuxParameters) *types.LinuxParameters {
 
-	if lp.Devices == nil || len(lp.Devices) == 0 {
+	if len(lp.Devices) == 0 {
 		return nil
 	}
 	bds := []types.Device{}
@@ -492,6 +533,7 @@ func toBatchLinuxParams(lp *LinuxParameters) *types.LinuxParameters {
 	}
 }
 
+// paramsMapToKvp converts a map to AWS Batch KeyValuePair slice
 func paramsMapToKvp(params map[string]string) []types.KeyValuePair {
 	pout := make([]types.KeyValuePair, len(params))
 	i := 0
