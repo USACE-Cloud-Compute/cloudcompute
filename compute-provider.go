@@ -2,6 +2,7 @@ package cloudcompute
 
 import (
 	"errors"
+	"io"
 	"regexp"
 
 	"github.com/google/uuid"
@@ -65,9 +66,20 @@ type TerminateJobOutput struct {
 // function to process the results of each job termination
 type TerminateJobFunction func(output TerminateJobOutput)
 
+type SubmitJobOptions struct {
+	SubmitEvent bool
+}
+
+type SubmitJobInput struct {
+	Jobs          []*Job
+	SubmitOptions SubmitJobOptions
+}
+
 // Interface for a compute provider.
 type ComputeProvider interface {
-	SubmitJob(job *Job) error
+	SubmitJob(input SubmitJobInput) error
+	//SubmitJob(job *Job) error
+	//SubmitJob2(jobInput SubmitJobInput) error
 	TerminateJobs(input TerminateJobInput) error
 	Status(jobQueue string, query JobsSummaryQuery) error
 	JobLog(submittedJobId string, token *string) (JobLogOutput, error)
@@ -76,8 +88,9 @@ type ComputeProvider interface {
 }
 
 type JobLogOutput struct {
-	Logs  []string
-	Token *string
+	Logs      []string
+	LogStream io.Reader
+	Token     *string
 }
 
 // Overrides the container command or environment from the base values
@@ -99,6 +112,7 @@ type Job struct {
 	ID                 uuid.UUID
 	EventID            uuid.UUID
 	ManifestID         uuid.UUID
+	PayloadID          uuid.UUID
 	JobName            string
 	JobQueue           string
 	JobDefinition      string

@@ -4,7 +4,9 @@ import (
 	"context"
 	"fmt"
 	"os/user"
+	"strings"
 
+	"github.com/google/uuid"
 	. "github.com/usace-cloud-compute/cloudcompute"
 	batchv1 "k8s.io/api/batch/v1"
 	corev1 "k8s.io/api/core/v1"
@@ -14,8 +16,8 @@ import (
 )
 
 type KubernetesComputeProviderConfig struct {
-	Namespace  string
-	Kubeconfig string // Path to kubeconfig file
+	Namespace  string `json:"namespace"`
+	Kubeconfig string `json:"kubeconfig"`
 }
 
 type KubernetesComputeProvider struct {
@@ -52,38 +54,105 @@ func NewKubernetesComputeProvider(config KubernetesComputeProviderConfig) (*Kube
 	}, nil
 }
 
-func (k *KubernetesComputeProvider) SubmitJob(job *Job) error {
-	pod := &corev1.Pod{
-		ObjectMeta: metav1.ObjectMeta{
-			Name: job.JobName,
-		},
-		Spec: corev1.PodSpec{
-			Containers: []corev1.Container{
-				{
-					Name:    job.JobName,
-					Image:   job.JobDefinition, // Use JobDefinition as the image
-					Command: job.ContainerOverrides.Command,
-					EnvFrom: []corev1.EnvFromSource{
-						{
-							SecretRef: &corev1.SecretEnvSource{
-								LocalObjectReference: corev1.LocalObjectReference{
-									Name: "your-secret-name",
-								},
+func (k *KubernetesComputeProvider) SubmitJob(input SubmitJobInput) error {
+	for _, job := range input.Jobs {
+		k8sname := uuid.New().String()
+		image := "docker.io/library/hello-world:latest"
+		jobparts := strings.Split(job.JobName, "_")
+		job.SubmittedJob = &SubmitJobResult{
+			JobId: &k8sname,
+		}
+		k8sjob := &batchv1.Job{
+			ObjectMeta: metav1.ObjectMeta{
+				Name: k8sname,
+				Labels: map[string]string{
+					"compute": jobparts[2],
+					"event":   jobparts[4],
+					"job":     jobparts[6],
+				},
+			},
+			Spec: batchv1.JobSpec{
+				Template: corev1.PodTemplateSpec{
+					Spec: corev1.PodSpec{
+						Containers: []corev1.Container{
+							{
+								Name: k8sname,
+								//Image:   job.JobDefinition,
+								Image:   image,
+								Command: job.ContainerOverrides.Command,
+								// EnvFrom: []corev1.EnvFromSource{
+								// 	{
+								// 		SecretRef: &corev1.SecretEnvSource{
+								// 			LocalObjectReference: corev1.LocalObjectReference{
+								// 				Name: "your-secret-name",
+								// 			},
+								// 		},
+								// 	},
+								// },
 							},
 						},
+						RestartPolicy: corev1.RestartPolicyNever,
 					},
 				},
 			},
-			RestartPolicy: corev1.RestartPolicyNever,
-		},
-	}
+		}
 
-	_, err := k.clientset.CoreV1().Pods(k.namespace).Create(context.TODO(), pod, metav1.CreateOptions{})
-	if err != nil {
-		return fmt.Errorf("failed to create pod: %v", err)
+		_, err := k.clientset.BatchV1().Jobs(k.namespace).Create(context.TODO(), k8sjob, metav1.CreateOptions{})
+		if err != nil {
+			return fmt.Errorf("failed to create pod: %v", err)
+		}
 	}
 	return nil
 }
+
+// func (k *KubernetesComputeProvider) SubmitJob(job *Job) error {
+// 	k8sname := uuid.New().String()
+// 	image := "docker.io/library/hello-world:latest"
+// 	jobparts := strings.Split(job.JobName, "_")
+// 	job.SubmittedJob = &SubmitJobResult{
+// 		JobId: &k8sname,
+// 	}
+// 	k8sjob := &batchv1.Job{
+// 		ObjectMeta: metav1.ObjectMeta{
+// 			Name: k8sname,
+// 			Labels: map[string]string{
+// 				"compute": jobparts[2],
+// 				"event":   jobparts[4],
+// 				"job":     jobparts[6],
+// 			},
+// 		},
+// 		Spec: batchv1.JobSpec{
+// 			Template: corev1.PodTemplateSpec{
+// 				Spec: corev1.PodSpec{
+// 					Containers: []corev1.Container{
+// 						{
+// 							Name: k8sname,
+// 							//Image:   job.JobDefinition,
+// 							Image:   image,
+// 							Command: job.ContainerOverrides.Command,
+// 							// EnvFrom: []corev1.EnvFromSource{
+// 							// 	{
+// 							// 		SecretRef: &corev1.SecretEnvSource{
+// 							// 			LocalObjectReference: corev1.LocalObjectReference{
+// 							// 				Name: "your-secret-name",
+// 							// 			},
+// 							// 		},
+// 							// 	},
+// 							// },
+// 						},
+// 					},
+// 					RestartPolicy: corev1.RestartPolicyNever,
+// 				},
+// 			},
+// 		},
+// 	}
+
+// 	_, err := k.clientset.BatchV1().Jobs(k.namespace).Create(context.TODO(), k8sjob, metav1.CreateOptions{})
+// 	if err != nil {
+// 		return fmt.Errorf("failed to create pod: %v", err)
+// 	}
+// 	return nil
+// }
 
 func (k *KubernetesComputeProvider) TerminateJobs(input TerminateJobInput) error {
 	for _, job := range input.VendorJobs {
@@ -124,7 +193,7 @@ func (k *KubernetesComputeProvider) JobLog(submittedJobId string, token *string)
 	}, nil
 }
 
-func (k *KubernetesComputeProvider) RegisterPlugin(plugin *Plugin) error {
+func (k *KubernetesComputeProvider) RegisterPlugin(plugin *Plugin) (PluginRegistrationOutput, error) {
 	job := &batchv1.Job{
 		ObjectMeta: metav1.ObjectMeta{
 			Name: plugin.Name,
@@ -156,9 +225,9 @@ func (k *KubernetesComputeProvider) RegisterPlugin(plugin *Plugin) error {
 
 	_, err := k.clientset.BatchV1().Jobs(k.namespace).Create(context.TODO(), job, metav1.CreateOptions{})
 	if err != nil {
-		return fmt.Errorf("failed to create job: %v", err)
+		return PluginRegistrationOutput{}, fmt.Errorf("failed to create job: %v", err)
 	}
-	return nil
+	return PluginRegistrationOutput{}, nil
 }
 
 func (k *KubernetesComputeProvider) UnregisterPlugin(nameAndRevision string) error {

@@ -97,7 +97,9 @@ func (cc *CloudCompute) RunParallel(concurrency int) error {
 
 			event.submissionIdMap = make(map[uuid.UUID]string) //reduce the scope of the idmap to a single event
 
-			for _, manifest := range event.Manifests {
+			manifestJobs := make([]*Job, len(event.Manifests))
+
+			for i, manifest := range event.Manifests {
 				if len(manifest.Inputs.PayloadAttributes) > 0 || len(manifest.Inputs.DataSources) > 0 || len(manifest.Actions) > 0 { //@TODO...ADD OUTPUT DATA SOURCES
 					err := manifest.WritePayload() //guarantees the payload is written to the manifest
 					if err != nil {
@@ -132,6 +134,7 @@ func (cc *CloudCompute) RunParallel(concurrency int) error {
 					ID:         jobID,
 					EventID:    event.ID,
 					ManifestID: manifest.ManifestID,
+					PayloadID:  manifest.payloadID,
 					//JobName:       fmt.Sprintf("%s_C_%s_E_%s_J_%s", CcProfile, cc.ID.String(), event.ID.String(), jobID),
 					JobName:       fmt.Sprintf("%s_c_%s_e_%s_j_%s", strings.ToLower(CcProfile), cc.ID.String(), event.ID.String(), jobID),
 					JobQueue:      cc.JobQueue,
@@ -147,20 +150,33 @@ func (cc *CloudCompute) RunParallel(concurrency int) error {
 						ResourceRequirements: manifest.ResourceRequirements,
 					},
 				}
-				err := cc.ComputeProvider.SubmitJob(&job)
-				if err != nil {
-					log.Printf("error submitting job for event %s: %s:\n", event.EventIdentifier, err)
-					return //@TODO what happens if a set submit ok then one fails?  How do we cancel? See notes below
-				}
-				if cc.JobStore != nil {
-					err := cc.JobStore.SaveJob(cc.ID, manifest.payloadID, event.EventIdentifier, &job)
-					if err != nil {
-						log.Printf("error saving job for event %s: %s:\n", event.EventIdentifier, err)
-						return //@TODO should we terminate everything if we cannot save to the compute store?
-					}
-				}
-				event.submissionIdMap[manifest.ManifestID] = *job.SubmittedJob.JobId
+
+				manifestJobs[i] = &job
+
+				///////////////////////////////////////////
+				// err := cc.ComputeProvider.SubmitJob(&job)
+				// if err != nil {
+				// 	log.Printf("error submitting job for event %s: %s:\n", event.EventIdentifier, err)
+				// 	return //@TODO what happens if a set submit ok then one fails?  How do we cancel? See notes below
+				// }
+				// if cc.JobStore != nil {
+				// 	err := cc.JobStore.SaveJob(cc.ID, manifest.payloadID, event.EventIdentifier, &job)
+				// 	if err != nil {
+				// 		log.Printf("error saving job for event %s: %s:\n", event.EventIdentifier, err)
+				// 		return //@TODO should we terminate everything if we cannot save to the compute store?
+				// 	}
+				// }
+				// event.submissionIdMap[manifest.ManifestID] = *job.SubmittedJob.JobId
+				////////////////////////////////////////////
 			}
+			err := cc.ComputeProvider.SubmitJob(SubmitJobInput{
+				Jobs: manifestJobs,
+			})
+			if err != nil {
+				log.Printf("error submitting job for event %s: %s:\n", event.EventIdentifier, err)
+				return //@TODO what happens if a set submit ok then one fails?  How do we cancel? See notes below
+			}
+
 		})
 
 		//if this was the last event, break out of the event loop

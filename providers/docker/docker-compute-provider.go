@@ -64,24 +64,46 @@ func (dcp *DockerComputeProvider) RegisterPlugin(plugin *Plugin) (PluginRegistra
 }
 
 // SubmitJob submits a job for execution.
-func (dcp *DockerComputeProvider) SubmitJob(job *Job) error {
-	jobid := uuid.New().String()
-	plugin, err := dcp.registry.Get(job.JobDefinition)
-	if err != nil {
-		return err
+func (dcp *DockerComputeProvider) SubmitJob(input SubmitJobInput) error {
+	for _, job := range input.Jobs {
+		jobid := uuid.New().String()
+		plugin, err := dcp.registry.Get(job.JobDefinition)
+		if err != nil {
+			return err
+		}
+		job.SubmittedJob = &SubmitJobResult{
+			JobId:        &jobid,
+			ResourceName: nil,
+		}
+		dcp.manager.AddJob(&DockerJob{
+			Job:            job,
+			Plugin:         plugin,
+			Status:         Submitted,
+			SecretsManager: dcp.sm,
+		})
 	}
-	job.SubmittedJob = &SubmitJobResult{
-		JobId:        &jobid,
-		ResourceName: nil,
-	}
-	dcp.manager.AddJob(&DockerJob{
-		Job:            job,
-		Plugin:         plugin,
-		Status:         Submitted,
-		SecretsManager: dcp.sm,
-	})
 	return nil
 }
+
+// SubmitJob submits a job for execution.
+// func (dcp *DockerComputeProvider) SubmitJob(job *Job) error {
+// 	jobid := uuid.New().String()
+// 	plugin, err := dcp.registry.Get(job.JobDefinition)
+// 	if err != nil {
+// 		return err
+// 	}
+// 	job.SubmittedJob = &SubmitJobResult{
+// 		JobId:        &jobid,
+// 		ResourceName: nil,
+// 	}
+// 	dcp.manager.AddJob(&DockerJob{
+// 		Job:            job,
+// 		Plugin:         plugin,
+// 		Status:         Submitted,
+// 		SecretsManager: dcp.sm,
+// 	})
+// 	return nil
+// }
 
 // TerminateJobs terminates jobs based on the provided input.
 func (dcp *DockerComputeProvider) TerminateJobs(input TerminateJobInput) error {
