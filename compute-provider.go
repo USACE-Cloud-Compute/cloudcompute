@@ -78,8 +78,6 @@ type SubmitJobInput struct {
 // Interface for a compute provider.
 type ComputeProvider interface {
 	SubmitJob(input SubmitJobInput) error
-	//SubmitJob(job *Job) error
-	//SubmitJob2(jobInput SubmitJobInput) error
 	TerminateJobs(input TerminateJobInput) error
 	Status(jobQueue string, query JobsSummaryQuery) error
 	JobLog(submittedJobId string, token *string) (JobLogOutput, error)

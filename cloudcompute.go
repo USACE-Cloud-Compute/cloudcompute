@@ -398,7 +398,7 @@ type MountPoint struct {
 
 type PluginComputeEnvironment struct {
 	VCPU       string   `json:"vcpu" jsonschema:"title=Virtual CPUs"`
-	Memory     string   `json:"memory" jsonschema:"title=Memory in MB"`
+	Memory     string   `json:"memory" jsonschema:"title=Memory in MiB"`
 	ExtraHosts []string `json:"extraHosts" jsonschema:"title=Extra Hosts for the Docker API"`
 }
 

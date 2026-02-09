@@ -20,9 +20,6 @@ var dynamicSubstitutionFormats = map[string]string{
 	"\"${args}\"":                  "{{=inputs.parameters.ExecArgs}}",
 }
 
-// ///////////////////////////
-// //Podspec patching structs
-// Tier 1: Resource (The PodSpec root)
 type PodSpecPatch struct {
 	ActiveDeadlineSeconds string            `json:"activeDeadlineSeconds,omitempty"`
 	Containers            []ContainerObject `json:"containers,omitempty"`
@@ -55,6 +52,7 @@ func getDefaultPodSpecPatchJson(plugin *cc.Plugin) (string, error) {
 
 }
 
+// @TODO might be able to do away with this using the {{=...}} operator.
 // substitution variables require invalid json strings.  We apply the final form here
 func validToInvalidJson(validJson []byte) string {
 	invalidJson := string(validJson)

@@ -83,16 +83,27 @@ func NewArgoWorkflowComputeProvider(config ArgoWorkflowComputeProviderConfig) (*
 }
 
 func (a *ArgoWorkflowComputeProvider) SubmitJob(input cc.SubmitJobInput) error {
+
+	//within the argo environment, events will be submitted as s single workflow
+	//the event id will be used for the workflow name
 	eventId := input.Jobs[0].EventID.String()
 
+	//for each job in the cloud compute event, we create an argo DAG Task
 	tasks := make([]v1alpha1.DAGTask, len(input.Jobs))
 
+	//argo templates will store the DAG Task and template specs for the job definitions
 	templates := []v1alpha1.Template{}
 
 	for i, job := range input.Jobs {
 
+		//look to see if a "job definition" template already exists
 		template := getTemplate(templates, job.JobDefinition)
 
+		//if "job definition" template does not exist, clone a saved workflow template
+		//and build the job template.
+		//@TODO: initially this strategy was used to better support dynamic parameters in jobs
+		//but because some parameters are required to be in "podSpecPatch" format,
+		// I'm not sure if we need to close these templates anymore
 		if template == nil {
 			templateClient, err := a.client.NewWorkflowTemplateServiceClient()
 			if err != nil {
@@ -108,6 +119,7 @@ func (a *ArgoWorkflowComputeProvider) SubmitJob(input cc.SubmitJobInput) error {
 			if err != nil {
 				return err
 			}
+
 			for _, specTmpl := range wft.Spec.Templates {
 				if specTmpl.Name == job.JobDefinition {
 					template = specTmpl.DeepCopy()
@@ -120,8 +132,7 @@ func (a *ArgoWorkflowComputeProvider) SubmitJob(input cc.SubmitJobInput) error {
 			return fmt.Errorf("missing template: %s", job.JobDefinition)
 		}
 
-		//////////
-		//get unique env for task
+		//create the environment variables unique to this task/job
 		tmplEnv := make([]corev1.EnvVar, len(job.ContainerOverrides.Environment))
 		for i, envVal := range job.ContainerOverrides.Environment {
 			tmplEnv[i] = corev1.EnvVar{
@@ -130,17 +141,16 @@ func (a *ArgoWorkflowComputeProvider) SubmitJob(input cc.SubmitJobInput) error {
 			}
 		}
 
+		//marshall to json so that the env vars can be merged into the podSpecPatch
 		envJson, err := json.Marshal(tmplEnv)
 		if err != nil {
 			return err
 		}
 
-		fmt.Println(envJson)
-
 		vcpu := getResourceOrDefault(job.ContainerOverrides.ResourceRequirements, cc.ResourceTypeVcpu, "1")
 		memory := getResourceOrDefault(job.ContainerOverrides.ResourceRequirements, cc.ResourceTypeMemory, "256Mi")
-		fmt.Println(vcpu)
-		fmt.Println(memory)
+
+		//start building the DAG Task
 		dagTask := v1alpha1.DAGTask{
 			Name:         fmt.Sprintf("e-%s", job.ID.String()),
 			Template:     job.JobDefinition,
@@ -163,7 +173,7 @@ func (a *ArgoWorkflowComputeProvider) SubmitJob(input cc.SubmitJobInput) error {
 			},
 		}
 
-		//command and argument overrides
+		//add any command/argument overrides for each task/job
 		if len(job.ContainerOverrides.Command) > 0 {
 			dagTask.Arguments.Parameters = append(dagTask.Arguments.Parameters, v1alpha1.Parameter{
 				Name:  "ExecCommand",
@@ -186,16 +196,17 @@ func (a *ArgoWorkflowComputeProvider) SubmitJob(input cc.SubmitJobInput) error {
 		tasks[i] = dagTask
 	}
 
+	//create the workflow which will run the event
 	wf := &v1alpha1.Workflow{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      eventId,
 			Namespace: *a.namespace,
 		},
 		Spec: v1alpha1.WorkflowSpec{
-			Entrypoint: "diamond-flow",
+			Entrypoint: "cc-entrypoint",
 			Templates: []v1alpha1.Template{
 				{
-					Name: "diamond-flow",
+					Name: "cc-entrypoint",
 					DAG: &v1alpha1.DAGTemplate{
 						Tasks: tasks,
 					},
@@ -204,18 +215,20 @@ func (a *ArgoWorkflowComputeProvider) SubmitJob(input cc.SubmitJobInput) error {
 		},
 	}
 
+	//append the jobdefinition templates to the workflow
 	wf.Spec.Templates = append(wf.Spec.Templates, templates...)
 
-	createdWf, err := a.serviceClient.CreateWorkflow(context.Background(), &workflow.WorkflowCreateRequest{
+	//send the workflow to argo using the service client
+	_, err := a.serviceClient.CreateWorkflow(context.Background(), &workflow.WorkflowCreateRequest{
 		Namespace: *a.namespace,
 		Workflow:  wf,
 	})
 
 	if err != nil {
-		log.Fatalf("Could not create workflow: %v", err)
+		return err
 	}
 
-	fmt.Printf("Workflow %s created via ServiceClient!\n", createdWf.Name)
+	//fmt.Printf("Workflow %s created via ServiceClient!\n", createdWf.Name)
 	return nil
 
 }
@@ -256,11 +269,11 @@ func (a *ArgoWorkflowComputeProvider) UnregisterPlugin(nameAndRevision string) e
 	templateClient, err := a.client.NewWorkflowTemplateServiceClient()
 
 	_, err = templateClient.DeleteWorkflowTemplate(a.ctx, &workflowtemplatepb.WorkflowTemplateDeleteRequest{
-		Name:      "whalesay-template",
-		Namespace: "argo",
+		Name:      nameAndRevision,
+		Namespace: *a.namespace,
 	})
 	if err != nil {
-		panic(err)
+		return fmt.Errorf("failed to unregister %s: %s", nameAndRevision, err)
 	}
 
 	return nil
@@ -268,8 +281,8 @@ func (a *ArgoWorkflowComputeProvider) UnregisterPlugin(nameAndRevision string) e
 
 func (a *ArgoWorkflowComputeProvider) JobLog(submittedJobId string, token *string) (cc.JobLogOutput, error) {
 	req := &workflowpkg.WorkflowLogRequest{
-		Namespace: "argo",
-		Name:      "testmes8vj6",
+		Namespace: *a.namespace,
+		Name:      submittedJobId,
 		// Optional: specify a specific podName to only get logs for one step
 		// PodName: "whalesay-run-abc12",
 		LogOptions: &corev1.PodLogOptions{
@@ -278,13 +291,13 @@ func (a *ArgoWorkflowComputeProvider) JobLog(submittedJobId string, token *strin
 		},
 	}
 
-	// 2. Open the log stream
+	//Open the log stream
 	stream, err := a.serviceClient.WorkflowLogs(a.ctx, req)
 	if err != nil {
 		return cc.JobLogOutput{}, fmt.Errorf("failed to open log stream: %v", err)
 	}
 
-	// 3. Process the stream
+	// Process the stream
 	for {
 		event, err := stream.Recv()
 		if err == io.EOF {
@@ -298,8 +311,17 @@ func (a *ArgoWorkflowComputeProvider) JobLog(submittedJobId string, token *strin
 		fmt.Println(event.Content)
 	}
 
+	//@TODO implement continuation tokens for cloud compute log requests
 	return cc.JobLogOutput{}, nil
 
+}
+
+func (a *ArgoWorkflowComputeProvider) TerminateJobs(input cc.TerminateJobInput) error {
+	return fmt.Errorf("not implemented")
+}
+
+func (a *ArgoWorkflowComputeProvider) Status(jobQueue string, query cc.JobsSummaryQuery) error {
+	return fmt.Errorf("not implemented")
 }
 
 func pluginToWorkflowTemplate(plugin *cc.Plugin) (*wfv1.WorkflowTemplate, error) {
@@ -318,14 +340,7 @@ func pluginToWorkflowTemplate(plugin *cc.Plugin) (*wfv1.WorkflowTemplate, error)
 		return nil, err
 	}
 
-	fmt.Println(podSpecPatch)
-	fmt.Println("---------")
-	//podSpecPatch = `{"containers":[{"name":"main", "env": {{inputs.parameters.DagTaskEnv}},"resources":{"requests":{"cpu":{{inputs.parameters.VCPU}},"memory":{{inputs.parameters.Memory}} }, "limits":{"cpu":{{inputs.parameters.VCPU}},"memory":{{inputs.parameters.Memory}} } } }]}`
-	//podSpecPatch = `{"containers":[{"name":"main", "env": {{inputs.parameters.DagTaskEnv}},"resources":{"requests":{"cpu":"{{inputs.parameters.VCPU}}","memory":"{{inputs.parameters.Memory}}" }} }]}`
-	fmt.Println(podSpecPatch)
-
 	//get command and args in json format
-
 	var jsonArgs []byte
 	if len(plugin.Command) > 1 {
 		args := plugin.Command[1:]
@@ -334,8 +349,6 @@ func pluginToWorkflowTemplate(plugin *cc.Plugin) (*wfv1.WorkflowTemplate, error)
 			return nil, err
 		}
 	}
-
-	fmt.Println(string(jsonArgs))
 
 	//create the CPU and Memory Parameters
 	//Subsitition values are VCPU and Memory
