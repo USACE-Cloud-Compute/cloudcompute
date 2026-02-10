@@ -65,16 +65,23 @@ func (dcp *DockerComputeProvider) RegisterPlugin(plugin *Plugin) (PluginRegistra
 
 // SubmitJob submits a job for execution.
 func (dcp *DockerComputeProvider) SubmitJob(input SubmitJobInput) error {
+	submissionIdMap := make(map[uuid.UUID]string)
 	for _, job := range input.Jobs {
 		jobid := uuid.New().String()
 		plugin, err := dcp.registry.Get(job.JobDefinition)
 		if err != nil {
 			return err
 		}
+
+		job.DependsOn = mapDependencies(job, submissionIdMap)
+
 		job.SubmittedJob = &SubmitJobResult{
 			JobId:        &jobid,
 			ResourceName: nil,
 		}
+
+		submissionIdMap[job.ManifestID] = *job.SubmittedJob.JobId
+
 		dcp.manager.AddJob(&DockerJob{
 			Job:            job,
 			Plugin:         plugin,
@@ -83,6 +90,17 @@ func (dcp *DockerComputeProvider) SubmitJob(input SubmitJobInput) error {
 		})
 	}
 	return nil
+}
+
+// Maps the Dependency identifiers to the compute environment identifiers received from submitted jobs.
+func mapDependencies(job *Job, submissionIdMap map[uuid.UUID]string) []string {
+	sdeps := make([]string, len(job.ManifestDependencies))
+	for i, d := range job.ManifestDependencies {
+		if sdep, ok := submissionIdMap[d]; ok {
+			sdeps[i] = sdep
+		}
+	}
+	return sdeps
 }
 
 // SubmitJob submits a job for execution.

@@ -107,20 +107,21 @@ type ResourceRequirement struct {
 // This is a single "job" or unit of compute for a ComputeProvider
 // Essentually it is a mapping of a single Manifest
 type Job struct {
-	ID                 uuid.UUID
-	EventID            uuid.UUID
-	ManifestID         uuid.UUID
-	PayloadID          uuid.UUID
-	JobName            string
-	JobQueue           string
-	JobDefinition      string
-	ContainerOverrides ContainerOverrides
-	DependsOn          []string //compute provider dependencies
-	Parameters         map[string]string
-	Tags               map[string]string
-	RetryAttemts       int32
-	JobTimeout         int32            //duration in seconds
-	SubmittedJob       *SubmitJobResult //reference to the job information from the compute environment
+	ID                   uuid.UUID
+	EventID              uuid.UUID
+	ManifestID           uuid.UUID
+	PayloadID            uuid.UUID
+	JobName              string
+	JobQueue             string
+	JobDefinition        string
+	ContainerOverrides   ContainerOverrides
+	DependsOn            []string
+	ManifestDependencies []uuid.UUID
+	Parameters           map[string]string
+	Tags                 map[string]string
+	RetryAttemts         int32
+	JobTimeout           int32            //duration in seconds
+	SubmittedJob         *SubmitJobResult //reference to the job information from the compute environment
 }
 
 // Vendor job data used for terminating jobs on the vendor's compute environment

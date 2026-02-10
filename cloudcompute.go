@@ -136,14 +136,14 @@ func (cc *CloudCompute) RunParallel(concurrency int) error {
 					ManifestID: manifest.ManifestID,
 					PayloadID:  manifest.payloadID,
 					//JobName:       fmt.Sprintf("%s_C_%s_E_%s_J_%s", CcProfile, cc.ID.String(), event.ID.String(), jobID),
-					JobName:       fmt.Sprintf("%s_c_%s_e_%s_j_%s", strings.ToLower(CcProfile), cc.ID.String(), event.ID.String(), jobID),
-					JobQueue:      cc.JobQueue,
-					JobDefinition: manifest.PluginDefinition,
-					DependsOn:     event.mapDependencies(&manifest),
-					Parameters:    manifest.Inputs.Parameters,
-					Tags:          manifest.Tags,
-					RetryAttemts:  manifest.RetryAttemts,
-					JobTimeout:    manifest.JobTimeout,
+					JobName:              fmt.Sprintf("%s_c_%s_e_%s_j_%s", strings.ToLower(CcProfile), cc.ID.String(), event.ID.String(), jobID),
+					JobQueue:             cc.JobQueue,
+					JobDefinition:        manifest.PluginDefinition,
+					ManifestDependencies: manifest.Dependencies, //dependenciesToStrings(&manifest),
+					Parameters:           manifest.Inputs.Parameters,
+					Tags:                 manifest.Tags,
+					RetryAttemts:         manifest.RetryAttemts,
+					JobTimeout:           manifest.JobTimeout,
 					ContainerOverrides: ContainerOverrides{
 						Environment:          env,
 						Command:              manifest.Command,
@@ -175,6 +175,15 @@ func (cc *CloudCompute) RunParallel(concurrency int) error {
 			if err != nil {
 				log.Printf("error submitting job for event %s: %s:\n", event.EventIdentifier, err)
 				return //@TODO what happens if a set submit ok then one fails?  How do we cancel? See notes below
+			}
+			if cc.JobStore != nil {
+				for _, job := range manifestJobs {
+					err := cc.JobStore.SaveJob(cc.ID, job.PayloadID, event.EventIdentifier, job)
+					if err != nil {
+						log.Printf("error saving job for event %s: %s:\n", event.EventIdentifier, err)
+						return //@TODO should we terminate everything if we cannot save to the compute store?
+					}
+				}
 			}
 
 		}, event)
@@ -352,6 +361,15 @@ func (e *Event) mapDependencies(manifest *ComputeManifest) []string {
 		if sdep, ok := e.submissionIdMap[d]; ok {
 			sdeps[i] = sdep
 		}
+	}
+	return sdeps
+}
+
+// Maps the Dependency identifiers to the compute environment identifiers received from submitted jobs.
+func dependenciesToStrings(manifest *ComputeManifest) []string {
+	sdeps := make([]string, len(manifest.Dependencies))
+	for i, d := range manifest.Dependencies {
+		sdeps[i] = d.String()
 	}
 	return sdeps
 }
