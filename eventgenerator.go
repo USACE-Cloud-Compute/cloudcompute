@@ -248,10 +248,10 @@ func NewEventList(events []Event) *EventList {
 func (el *EventList) NextEvent() (Event, bool, error) {
 	el.mu.Lock()
 	defer el.mu.Unlock()
-	hasNext := el.currentEvent < len(el.events)
-	if !hasNext {
-		return Event{}, hasNext, nil
-	}
+	hasNext := el.currentEvent < len(el.events)-1
+	// if !hasNext {
+	// 	return Event{}, hasNext, nil
+	//}
 	event := el.events[el.currentEvent]
 	if event.EventIdentifier == "" {
 		event.EventIdentifier = strconv.Itoa(el.currentEvent)

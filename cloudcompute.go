@@ -66,7 +66,7 @@ func (cc *CloudCompute) RunParallel(concurrency int) error {
 			continue
 		}
 
-		cr.Run(func() {
+		cr.Run(func(event Event) {
 
 			//start by sorting the manifests if necessary
 			if !event.sorted {
@@ -177,7 +177,7 @@ func (cc *CloudCompute) RunParallel(concurrency int) error {
 				return //@TODO what happens if a set submit ok then one fails?  How do we cancel? See notes below
 			}
 
-		})
+		}, event)
 
 		//if this was the last event, break out of the event loop
 		if !hasNext {
@@ -440,13 +440,13 @@ func NewConcurrentRunner(limit int) *ConcurrentRunner {
 	}
 }
 
-func (cr *ConcurrentRunner) Run(cf func()) {
+func (cr *ConcurrentRunner) Run(cf func(event Event), event Event) {
 	cr.semaphore <- struct{}{}
 	go func() {
 		defer func() {
 			<-cr.semaphore
 		}()
-		cf()
+		cf(event)
 	}()
 }
 

@@ -3,7 +3,6 @@ package k8sargo
 import (
 	"context"
 	"encoding/json"
-	"flag"
 	"fmt"
 	"io"
 	"log"
@@ -23,8 +22,13 @@ import (
 	"k8s.io/apimachinery/pkg/util/intstr"
 )
 
+const (
+	defaultNamespace string = "argo"
+)
+
 type ArgoWorkflowComputeProviderConfig struct {
-	Namespace string `json:"namespace"`
+	Namespace  string `json:"namespace"`
+	ServiceUrl string `json:"service-url"`
 }
 
 type ArgoWorkflowComputeProvider struct {
@@ -35,39 +39,42 @@ type ArgoWorkflowComputeProvider struct {
 }
 
 func NewArgoWorkflowComputeProvider(config ArgoWorkflowComputeProviderConfig) (*ArgoWorkflowComputeProvider, error) {
-	var (
-		argoServer = flag.String("argo-server", getEnvOrDefault("ARGO_SERVER", "localhost:2746"), "Argo Server address")
-		token      = flag.String("token", os.Getenv("ARGO_TOKEN"), "Bearer token for authentication")
-		namespace  = flag.String("namespace", "argo", "namespace for workflow")
-		secure     = flag.Bool("secure", true, "whether the Argo Server uses TLS")
-		insecure   = flag.Bool("insecure-skip-verify", true, "skip TLS certificate verification")
-	)
-	flag.Parse()
+	// var (
+	// 	//argoServer = flag.String("argo-server", getEnvOrDefault("ARGO_SERVER", "localhost:2746"), "Argo Server address")
+	// 	token = flag.String("token", os.Getenv("ARGO_TOKEN"), "Bearer token for authentication")
+	// 	//namespace  = flag.String("namespace", "argo", "namespace for workflow")
+	// 	secure   = flag.Bool("secure", true, "whether the Argo Server uses TLS")
+	// 	insecure = flag.Bool("insecure-skip-verify", true, "skip TLS certificate verification")
+	// )
+	// flag.Parse()
 
-	if *argoServer == "" {
-		fmt.Fprintf(os.Stderr, "Error: --argo-server is required (or set ARGO_SERVER env var)\n")
-		os.Exit(1)
+	secure := true
+	insecure := true
+	token := ""
+
+	if config.ServiceUrl == "" {
+		return nil, fmt.Errorf("ServiceUrl is a required configuration option")
 	}
 
-	fmt.Printf("Connecting to Argo Server at %s...\n", *argoServer)
+	if config.Namespace == "" {
+		config.Namespace = defaultNamespace
+	}
 
-	// <embed id="grpc-client-operations">
 	ctx, client, err := apiclient.NewClientFromOpts(apiclient.Opts{
 		ArgoServerOpts: apiclient.ArgoServerOpts{
-			URL:                *argoServer,
-			Secure:             *secure,
-			InsecureSkipVerify: *insecure,
+			URL:                config.ServiceUrl,
+			Secure:             secure,
+			InsecureSkipVerify: insecure,
 		},
 		AuthSupplier: func() string {
-			if *token != "" {
-				return *token
+			if token != "" {
+				return token
 			}
 			return ""
 		},
 	})
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "Error creating client: %v\n", err)
-		os.Exit(1)
+		return nil, fmt.Errorf("error creating client: %s", err)
 	}
 
 	// Create workflow service client
@@ -77,7 +84,7 @@ func NewArgoWorkflowComputeProvider(config ArgoWorkflowComputeProviderConfig) (*
 		client:        client,
 		serviceClient: serviceClient,
 		ctx:           ctx,
-		namespace:     namespace,
+		namespace:     &config.Namespace,
 	}, nil
 
 }
@@ -189,6 +196,11 @@ func (a *ArgoWorkflowComputeProvider) SubmitJob(input cc.SubmitJobInput) error {
 					Name:  "ExecArgs",
 					Value: v1alpha1.AnyStringPtr(string(jsonArgs)),
 				})
+			} else {
+				dagTask.Arguments.Parameters = append(dagTask.Arguments.Parameters, v1alpha1.Parameter{
+					Name:  "ExecArgs",
+					Value: v1alpha1.AnyStringPtr("[]"),
+				})
 			}
 
 		}
@@ -258,7 +270,7 @@ func (a *ArgoWorkflowComputeProvider) RegisterPlugin(plugin *cc.Plugin) (cc.Plug
 	//fmt.Println(resp.GenerateName)
 
 	return cc.PluginRegistrationOutput{
-		Name:         resp.Name,
+		Name:         strings.ToLower(resp.Name),
 		ResourceName: fmt.Sprintf("%s::%s::%s::%s", resp.ObjectMeta.Namespace, resp.ObjectMeta.Name, resp.ObjectMeta.UID, resp.ObjectMeta.ResourceVersion),
 		Revision:     int32(resp.ObjectMeta.Generation),
 	}, nil
@@ -328,7 +340,7 @@ func pluginToWorkflowTemplate(plugin *cc.Plugin) (*wfv1.WorkflowTemplate, error)
 
 	wfTemplate := &wfv1.WorkflowTemplate{
 		ObjectMeta: metav1.ObjectMeta{
-			Name: plugin.Name,
+			Name: strings.ToLower(plugin.Name),
 		},
 		Spec: wfv1.WorkflowSpec{},
 	}
@@ -348,6 +360,8 @@ func pluginToWorkflowTemplate(plugin *cc.Plugin) (*wfv1.WorkflowTemplate, error)
 		if err != nil {
 			return nil, err
 		}
+	} else {
+		jsonArgs = []byte("[]")
 	}
 
 	//create the CPU and Memory Parameters
@@ -364,6 +378,10 @@ func pluginToWorkflowTemplate(plugin *cc.Plugin) (*wfv1.WorkflowTemplate, error)
 			Value: wfv1.AnyStringPtr(fmt.Sprintf("%s%s", plugin.ComputeEnvironment.Memory, "Mi")),
 		},
 		{
+			Name:    "DagTaskEnv",
+			Default: wfv1.AnyStringPtr(string("{}")),
+		},
+		{
 			Name:    "ExecCommand",
 			Default: wfv1.AnyStringPtr(plugin.Command[0]),
 		},
@@ -371,11 +389,13 @@ func pluginToWorkflowTemplate(plugin *cc.Plugin) (*wfv1.WorkflowTemplate, error)
 			Name:    "ExecArgs",
 			Default: wfv1.AnyStringPtr(string(jsonArgs)),
 		},
-		{
-			Name:    "DagTaskEnv",
-			Default: wfv1.AnyStringPtr(string("{}")),
-		},
 	}
+
+	// if len(plugin.Command) > 0 {
+	// 	parameters = append(parameters, []wfv1.Parameter{
+
+	// 	}...)
+	// }
 
 	if plugin.ExecutionTimeout != nil && *plugin.ExecutionTimeout > 0 {
 		parameters = append(parameters, wfv1.Parameter{
@@ -386,7 +406,7 @@ func pluginToWorkflowTemplate(plugin *cc.Plugin) (*wfv1.WorkflowTemplate, error)
 
 	//build the template
 	tmpl := wfv1.Template{
-		Name:     plugin.Name,
+		Name:     strings.ToLower(plugin.Name),
 		FailFast: toPtr(true),
 		Inputs: wfv1.Inputs{
 			Parameters: parameters,
