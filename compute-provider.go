@@ -70,14 +70,25 @@ type SubmitJobOptions struct {
 	SubmitEvent bool
 }
 
-type SubmitJobInput struct {
-	Jobs          []*Job
-	SubmitOptions SubmitJobOptions
+type SubmitJobsInput struct {
+	Jobs            []*Job
+	SubmissionIdMap map[uuid.UUID]string
+}
+
+func (se *SubmitJobsInput) MapDependencies(job *Job) []string {
+	sdeps := make([]string, len(job.ManifestDependencies))
+	for i, d := range job.ManifestDependencies {
+		if sdep, ok := se.SubmissionIdMap[d]; ok {
+			sdeps[i] = sdep
+		}
+	}
+	return sdeps
 }
 
 // Interface for a compute provider.
 type ComputeProvider interface {
-	SubmitJob(input SubmitJobInput) error
+	SubmitJobs(input SubmitJobsInput) error
+	//SubmitJobs(input Event) error
 	TerminateJobs(input TerminateJobInput) error
 	Status(jobQueue string, query JobsSummaryQuery) error
 	JobLog(submittedJobId string, token *string) (JobLogOutput, error)

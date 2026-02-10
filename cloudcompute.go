@@ -169,8 +169,9 @@ func (cc *CloudCompute) RunParallel(concurrency int) error {
 				// event.submissionIdMap[manifest.ManifestID] = *job.SubmittedJob.JobId
 				////////////////////////////////////////////
 			}
-			err := cc.ComputeProvider.SubmitJob(SubmitJobInput{
-				Jobs: manifestJobs,
+			err := cc.ComputeProvider.SubmitJobs(SubmitJobsInput{
+				Jobs:            manifestJobs,
+				SubmissionIdMap: make(map[uuid.UUID]string),
 			})
 			if err != nil {
 				log.Printf("error submitting job for event %s: %s:\n", event.EventIdentifier, err)
@@ -355,24 +356,24 @@ func (e *Event) AddManifestAt(m ComputeManifest, i int) {
 }
 
 // Maps the Dependency identifiers to the compute environment identifiers received from submitted jobs.
-func (e *Event) mapDependencies(manifest *ComputeManifest) []string {
-	sdeps := make([]string, len(manifest.Dependencies))
-	for i, d := range manifest.Dependencies {
-		if sdep, ok := e.submissionIdMap[d]; ok {
-			sdeps[i] = sdep
-		}
-	}
-	return sdeps
-}
+// func (e *Event) mapDependencies(manifest *ComputeManifest) []string {
+// 	sdeps := make([]string, len(manifest.Dependencies))
+// 	for i, d := range manifest.Dependencies {
+// 		if sdep, ok := e.submissionIdMap[d]; ok {
+// 			sdeps[i] = sdep
+// 		}
+// 	}
+// 	return sdeps
+// }
 
-// Maps the Dependency identifiers to the compute environment identifiers received from submitted jobs.
-func dependenciesToStrings(manifest *ComputeManifest) []string {
-	sdeps := make([]string, len(manifest.Dependencies))
-	for i, d := range manifest.Dependencies {
-		sdeps[i] = d.String()
-	}
-	return sdeps
-}
+// // Maps the Dependency identifiers to the compute environment identifiers received from submitted jobs.
+// func dependenciesToStrings(manifest *ComputeManifest) []string {
+// 	sdeps := make([]string, len(manifest.Dependencies))
+// 	for i, d := range manifest.Dependencies {
+// 		sdeps[i] = d.String()
+// 	}
+// 	return sdeps
+// }
 
 /////////////////////////////
 ///////// PLUGIN ////////////

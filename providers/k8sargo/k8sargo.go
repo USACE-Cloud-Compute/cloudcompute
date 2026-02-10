@@ -89,7 +89,7 @@ func NewArgoWorkflowComputeProvider(config ArgoWorkflowComputeProviderConfig) (*
 
 }
 
-func (a *ArgoWorkflowComputeProvider) SubmitJob(input cc.SubmitJobInput) error {
+func (a *ArgoWorkflowComputeProvider) SubmitJobs(input cc.SubmitJobsInput) error {
 
 	//within the argo environment, events will be submitted as s single workflow
 	//the event id will be used for the workflow name

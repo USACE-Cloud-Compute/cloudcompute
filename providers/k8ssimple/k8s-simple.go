@@ -54,7 +54,7 @@ func NewKubernetesComputeProvider(config KubernetesComputeProviderConfig) (*Kube
 	}, nil
 }
 
-func (k *KubernetesComputeProvider) SubmitJob(input SubmitJobInput) error {
+func (k *KubernetesComputeProvider) SubmitJobs(input SubmitJobsInput) error {
 	for _, job := range input.Jobs {
 		k8sname := uuid.New().String()
 		image := "docker.io/library/hello-world:latest"

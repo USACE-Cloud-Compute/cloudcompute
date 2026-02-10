@@ -15,7 +15,6 @@ import (
 	"github.com/aws/aws-sdk-go-v2/service/batch"
 	"github.com/aws/aws-sdk-go-v2/service/batch/types"
 	"github.com/aws/aws-sdk-go-v2/service/cloudwatchlogs"
-	"github.com/google/uuid"
 	. "github.com/usace-cloud-compute/cc-go-sdk"
 	. "github.com/usace-cloud-compute/cloudcompute"
 )
@@ -100,9 +99,9 @@ func NewAwsBatchProvider(input AwsBatchProviderInput) (*AwsBatchProvider, error)
 
 // SubmitJob submits a job to AWS Batch
 // It takes a Job struct and returns an error if submission fails
-func (abp *AwsBatchProvider) SubmitJob(input SubmitJobInput) error {
-	submissionIdMap := make(map[uuid.UUID]string)
-	for _, job := range input.Jobs {
+func (abp *AwsBatchProvider) SubmitJobs(event SubmitJobsInput) error {
+	//submissionIdMap := make(map[uuid.UUID]string)
+	for _, job := range event.Jobs {
 		var retryStrategy *types.RetryStrategy
 		var timeout *types.JobTimeout
 
@@ -114,7 +113,7 @@ func (abp *AwsBatchProvider) SubmitJob(input SubmitJobInput) error {
 			timeout = &types.JobTimeout{AttemptDurationSeconds: &job.JobTimeout}
 		}
 
-		job.DependsOn = mapDependencies(job, submissionIdMap)
+		job.DependsOn = event.MapDependencies(job)
 
 		submitJobInput := &batch.SubmitJobInput{
 			JobDefinition:      &job.JobDefinition,
@@ -139,22 +138,22 @@ func (abp *AwsBatchProvider) SubmitJob(input SubmitJobInput) error {
 			ResourceName: submitResult.JobArn,
 		}
 
-		submissionIdMap[job.ManifestID] = *job.SubmittedJob.JobId
+		event.SubmissionIdMap[job.ManifestID] = *job.SubmittedJob.JobId
 
 	}
 
 	return nil
 }
 
-func mapDependencies(job *Job, submissionIdMap map[uuid.UUID]string) []string {
-	sdeps := make([]string, len(job.ManifestDependencies))
-	for i, d := range job.ManifestDependencies {
-		if sdep, ok := submissionIdMap[d]; ok {
-			sdeps[i] = sdep
-		}
-	}
-	return sdeps
-}
+// func mapDependencies(job *Job, submissionIdMap map[uuid.UUID]string) []string {
+// 	sdeps := make([]string, len(job.ManifestDependencies))
+// 	for i, d := range job.ManifestDependencies {
+// 		if sdep, ok := submissionIdMap[d]; ok {
+// 			sdeps[i] = sdep
+// 		}
+// 	}
+// 	return sdeps
+// }
 
 // func (abp *AwsBatchProvider) SubmitJob(job *Job) error {
 // 	var retryStrategy *types.RetryStrategy

@@ -63,24 +63,53 @@ func (dcp *DockerComputeProvider) RegisterPlugin(plugin *Plugin) (PluginRegistra
 	return output, err
 }
 
+// func (dcp *DockerComputeProvider) SubmitJobs(event Event) error {
+// 	// 	submissionIdMap := make(map[uuid.UUID]string)
+// 	for _, job := range event. {
+// 		jobid := uuid.New().String()
+// 		plugin, err := dcp.registry.Get(job.JobDefinition)
+// 		if err != nil {
+// 			return err
+// 		}
+
+// 		job.DependsOn = mapDependencies(job, submissionIdMap)
+
+// 		job.SubmittedJob = &SubmitJobResult{
+// 			JobId:        &jobid,
+// 			ResourceName: nil,
+// 		}
+
+// 		submissionIdMap[job.ManifestID] = *job.SubmittedJob.JobId
+
+// 		dcp.manager.AddJob(&DockerJob{
+// 			Job:            job,
+// 			Plugin:         plugin,
+// 			Status:         Submitted,
+// 			SecretsManager: dcp.sm,
+// 		})
+// 	}
+// 	return nil
+
+// }
+
 // SubmitJob submits a job for execution.
-func (dcp *DockerComputeProvider) SubmitJob(input SubmitJobInput) error {
-	submissionIdMap := make(map[uuid.UUID]string)
-	for _, job := range input.Jobs {
+func (dcp *DockerComputeProvider) SubmitJobs(event SubmitJobsInput) error {
+	//submissionIdMap := make(map[uuid.UUID]string)
+	for _, job := range event.Jobs {
 		jobid := uuid.New().String()
 		plugin, err := dcp.registry.Get(job.JobDefinition)
 		if err != nil {
 			return err
 		}
 
-		job.DependsOn = mapDependencies(job, submissionIdMap)
+		job.DependsOn = event.MapDependencies(job)
 
 		job.SubmittedJob = &SubmitJobResult{
 			JobId:        &jobid,
 			ResourceName: nil,
 		}
 
-		submissionIdMap[job.ManifestID] = *job.SubmittedJob.JobId
+		event.SubmissionIdMap[job.ManifestID] = *job.SubmittedJob.JobId
 
 		dcp.manager.AddJob(&DockerJob{
 			Job:            job,
@@ -93,15 +122,15 @@ func (dcp *DockerComputeProvider) SubmitJob(input SubmitJobInput) error {
 }
 
 // Maps the Dependency identifiers to the compute environment identifiers received from submitted jobs.
-func mapDependencies(job *Job, submissionIdMap map[uuid.UUID]string) []string {
-	sdeps := make([]string, len(job.ManifestDependencies))
-	for i, d := range job.ManifestDependencies {
-		if sdep, ok := submissionIdMap[d]; ok {
-			sdeps[i] = sdep
-		}
-	}
-	return sdeps
-}
+// func mapDependencies(job *Job, submissionIdMap map[uuid.UUID]string) []string {
+// 	sdeps := make([]string, len(job.ManifestDependencies))
+// 	for i, d := range job.ManifestDependencies {
+// 		if sdep, ok := submissionIdMap[d]; ok {
+// 			sdeps[i] = sdep
+// 		}
+// 	}
+// 	return sdeps
+// }
 
 // SubmitJob submits a job for execution.
 // func (dcp *DockerComputeProvider) SubmitJob(job *Job) error {
