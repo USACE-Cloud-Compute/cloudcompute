@@ -1,4 +1,4 @@
-package cloudcompute
+package docker
 
 import (
 	"log"

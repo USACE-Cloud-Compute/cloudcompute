@@ -329,7 +329,15 @@ func (a *ArgoWorkflowComputeProvider) JobLog(submittedJobId string, token *strin
 }
 
 func (a *ArgoWorkflowComputeProvider) TerminateJobs(input cc.TerminateJobInput) error {
-	return fmt.Errorf("not implemented")
+
+	_, err := a.serviceClient.TerminateWorkflow(context.Background(), &workflow.WorkflowTerminateRequest{
+		Name:      "test",
+		Namespace: *a.namespace,
+	})
+	if err != nil {
+		return fmt.Errorf("failed to terminate: %v", err)
+	}
+	return nil
 }
 
 func (a *ArgoWorkflowComputeProvider) Status(jobQueue string, query cc.JobsSummaryQuery) error {
