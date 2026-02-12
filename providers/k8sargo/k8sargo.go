@@ -240,9 +240,7 @@ func (a *ArgoWorkflowComputeProvider) SubmitJobs(input cc.SubmitJobsInput) error
 		return err
 	}
 
-	//fmt.Printf("Workflow %s created via ServiceClient!\n", createdWf.Name)
 	return nil
-
 }
 
 func (a *ArgoWorkflowComputeProvider) RegisterPlugin(plugin *cc.Plugin) (cc.PluginRegistrationOutput, error) {
@@ -291,12 +289,13 @@ func (a *ArgoWorkflowComputeProvider) UnregisterPlugin(nameAndRevision string) e
 	return nil
 }
 
-func (a *ArgoWorkflowComputeProvider) JobLog(submittedJobId string, token *string) (cc.JobLogOutput, error) {
+// argo workflows will use the event identifier as the Log Request Name, and the pod name for a specific filter
+func (a *ArgoWorkflowComputeProvider) JobLog(input cc.JobLogInput) (cc.JobLogOutput, error) {
 	req := &workflowpkg.WorkflowLogRequest{
 		Namespace: *a.namespace,
-		Name:      submittedJobId,
+		Name:      input.VendorJobId,
 		// Optional: specify a specific podName to only get logs for one step
-		// PodName: "whalesay-run-abc12",
+		PodName: input.AltId,
 		LogOptions: &corev1.PodLogOptions{
 			Container: "main",
 			Follow:    false, // Set to false for completed jobs
@@ -328,6 +327,7 @@ func (a *ArgoWorkflowComputeProvider) JobLog(submittedJobId string, token *strin
 
 }
 
+// @TODO NOT WORKING OR TESTED
 func (a *ArgoWorkflowComputeProvider) TerminateJobs(input cc.TerminateJobInput) error {
 
 	_, err := a.serviceClient.TerminateWorkflow(context.Background(), &workflow.WorkflowTerminateRequest{
@@ -341,7 +341,53 @@ func (a *ArgoWorkflowComputeProvider) TerminateJobs(input cc.TerminateJobInput) 
 }
 
 func (a *ArgoWorkflowComputeProvider) Status(jobQueue string, query cc.JobsSummaryQuery) error {
-	return fmt.Errorf("not implemented")
+	wf, err := a.serviceClient.GetWorkflow(context.Background(), &workflowpkg.WorkflowGetRequest{
+		Namespace: *a.namespace,
+		Name:      query.QueryValue.Event,
+	})
+	if err != nil {
+		return err
+	}
+
+	fmt.Printf("Workflow: %s | Phase: %s\n", wf.Name, wf.Status.Phase)
+	createdTime := wf.CreationTimestamp.UnixMilli()
+	fmt.Println("Individual Task Statuses:")
+
+	// 2. Iterate through Status.Nodes to find individual task results
+	//for nopw load into single array
+	//summaries:=make([]cc.JobSummary,len(wf.Status.Nodes))
+	summaries := []cc.JobSummary{}
+
+	for _, node := range wf.Status.Nodes {
+		// Node types include: "Pod", "Container", "DAG", "Steps"
+		// Most DAG tasks appear as "Pod" or "Container" types once running
+		if node.Type == wfv1.NodeTypePod || node.Type == wfv1.NodeTypeContainer {
+			startTime := node.StartedAt.Time.UnixMilli()
+			endTime := node.FinishedAt.Time.UnixMilli()
+			summaries = append(summaries, cc.JobSummary{
+				JobId:        node.ID,
+				JobName:      node.DisplayName,
+				CreatedAt:    &createdTime,
+				StartedAt:    &startTime,
+				Status:       argoToCcStatusMap[string(node.Phase)],
+				StatusDetail: &node.Message,
+				StoppedAt:    &endTime,
+				ResourceName: node.TemplateName,
+			})
+		}
+	}
+	query.JobSummaryFunction(summaries)
+	return nil
+}
+
+var argoToCcStatusMap = map[string]string{
+	"Pending":   "PENDING",
+	"Running":   "RUNNING",
+	"Succeeded": "SUCCEDED",
+	"Skipped":   "FAILED",
+	"Failed":    "FAILED",
+	"Error":     "FAILED",
+	"Omitted":   "FAILED",
 }
 
 func pluginToWorkflowTemplate(plugin *cc.Plugin) (*wfv1.WorkflowTemplate, error) {

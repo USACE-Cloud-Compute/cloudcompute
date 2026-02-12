@@ -166,7 +166,9 @@ func subTestAWSBatchComputeProvider(t *testing.T, terminate bool) {
 	})
 
 	t.Run("log test", func(t *testing.T) {
-		logs, err := awsbatch.JobLog(submissionId, nil)
+		logs, err := awsbatch.JobLog(JobLogInput{
+			VendorJobId: submissionId,
+		})
 		if err != nil {
 			// Log group might not exist yet, which is valid for a brand new job
 			assert.Contains(t, err.Error(), "ResourceNotFoundException")

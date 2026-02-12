@@ -91,9 +91,16 @@ type ComputeProvider interface {
 	//SubmitJobs(input Event) error
 	TerminateJobs(input TerminateJobInput) error
 	Status(jobQueue string, query JobsSummaryQuery) error
-	JobLog(submittedJobId string, token *string) (JobLogOutput, error)
+	//JobLog(submittedJobId string, token *string) (JobLogOutput, error)
+	JobLog(input JobLogInput) (JobLogOutput, error)
 	RegisterPlugin(plugin *Plugin) (PluginRegistrationOutput, error)
 	UnregisterPlugin(nameAndRevision string) error
+}
+
+type JobLogInput struct {
+	VendorJobId       string
+	AltId             string
+	ContinuationToken *string
 }
 
 type JobLogOutput struct {

@@ -426,14 +426,15 @@ func (abp *AwsBatchProvider) Status(jobQueue string, query JobsSummaryQuery) err
 // It takes a submitted job ID and an optional token for pagination
 // @TODO this assumes the logs are rather short.
 // Need to update for logs that require pagenation in the AWS SDK
-func (abp *AwsBatchProvider) JobLog(submittedJobId string, token *string) (JobLogOutput, error) {
+func (abp *AwsBatchProvider) JobLog(input JobLogInput) (JobLogOutput, error) {
 
+	token := input.ContinuationToken
 	//allow zero value in the call but set as nil for AWS
 	if token != nil && *token == "" {
 		token = nil
 	}
 
-	jobDesc, err := abp.describeBatchJobs([]string{submittedJobId})
+	jobDesc, err := abp.describeBatchJobs([]string{input.VendorJobId})
 	if err != nil {
 		return JobLogOutput{}, err
 	}

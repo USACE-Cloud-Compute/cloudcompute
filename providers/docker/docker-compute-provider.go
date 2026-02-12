@@ -175,7 +175,7 @@ func (dcp *DockerComputeProvider) Status(jobQueue string, query JobsSummaryQuery
 	return nil
 }
 
-func (dcp *DockerComputeProvider) JobLog(submittedJobId string, token *string) (JobLogOutput, error) {
+func (dcp *DockerComputeProvider) JobLog(input JobLogInput) (JobLogOutput, error) {
 	log.Println("Not Implemented")
 	return JobLogOutput{}, nil
 }
