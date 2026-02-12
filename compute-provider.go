@@ -135,6 +135,27 @@ type Job struct {
 	SubmittedJob         *SubmitJobResult //reference to the job information from the compute environment
 }
 
+func (j *Job) ToVendorJob() VendorJob {
+	return SubmittedVendorJob{
+		SubmittedJobId: *j.SubmittedJob.JobId,
+		JobName:        j.JobName,
+	}
+}
+
+// implementation of Vendor Job over the Job struct
+type SubmittedVendorJob struct {
+	SubmittedJobId string
+	JobName        string
+}
+
+func (svj SubmittedVendorJob) ID() string {
+	return svj.SubmittedJobId
+}
+
+func (svj SubmittedVendorJob) Name() string {
+	return svj.JobName
+}
+
 // Vendor job data used for terminating jobs on the vendor's compute environment
 // @TODO, why can't this be replaced by SubmitJobResult?
 type VendorJob interface {

@@ -246,7 +246,6 @@ func (abp *AwsBatchProvider) UnregisterPlugin(nameAndRevision string) error {
 		JobDefinition: &nameAndRevision,
 	}
 	_, err := abp.client.DeregisterJobDefinition(ctx, &dji)
-	log.Printf("Unable to deregister AWS Batch Job: %s.  Error: %s\n", nameAndRevision, err)
 	return err
 }
 
