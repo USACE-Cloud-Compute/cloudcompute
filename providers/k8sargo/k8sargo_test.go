@@ -26,6 +26,95 @@ func setupTestProvider(t *testing.T) *ArgoWorkflowComputeProvider {
 	return provider
 }
 
+func TestArgoDiamondDependencyRun(t *testing.T) {
+	fmt.Println("asdfasdf")
+
+	argoservice := setupTestProvider(t)
+	pluginName := os.Getenv("TEST_PLUGIN_NAME")
+	//jobQueue := os.Getenv("AWS_BATCH_QUEUE")
+	plugin := Plugin{
+		Name:        pluginName,
+		ImageAndTag: "busybox",
+		Command: []string{"/bin/sh",
+			"-c",
+			"echo 'Starting Compute in CC'; sleep 30; echo 'Finished Compute'"},
+		ComputeEnvironment: PluginComputeEnvironment{Memory: "512", VCPU: "1"},
+	}
+
+	var revision int32 = -1
+
+	t.Run("register plugin", func(t *testing.T) {
+		reg, err := argoservice.RegisterPlugin(&plugin)
+		assert.NoError(t, err)
+		assert.Contains(t, reg.ResourceName, pluginName)
+		revision = reg.Revision
+	})
+
+	fmt.Println(revision)
+
+	t.Run("run plugin", func(t *testing.T) {
+		computeId := uuid.New()
+		job1Id := uuid.New()
+		eventId := uuid.New()
+		manifestId := uuid.New()
+		job1Name := fmt.Sprintf("%s_c_%s_e_%s_j_%s", "cc", computeId.String(), eventId.String(), job1Id.String())
+		job1 := Job{
+			ID:            job1Id,
+			EventID:       eventId,
+			ManifestID:    manifestId,
+			JobName:       job1Name,
+			JobQueue:      "",
+			JobDefinition: pluginName,
+		}
+
+		job2Id := uuid.New()
+		job2Name := fmt.Sprintf("%s_c_%s_e_%s_j_%s", "cc", computeId.String(), eventId.String(), job2Id.String())
+		job2 := Job{
+			ID:            job2Id,
+			EventID:       eventId,
+			ManifestID:    manifestId,
+			JobName:       job2Name,
+			JobQueue:      "",
+			JobDefinition: pluginName,
+			DependsOn:     []string{job1Id.String()},
+		}
+
+		job3Id := uuid.New()
+		job3Name := fmt.Sprintf("%s_c_%s_e_%s_j_%s", "cc", computeId.String(), eventId.String(), job3Id.String())
+		job3 := Job{
+			ID:            job3Id,
+			EventID:       eventId,
+			ManifestID:    manifestId,
+			JobName:       job3Name,
+			JobQueue:      "",
+			JobDefinition: pluginName,
+			DependsOn:     []string{job1Id.String()},
+		}
+
+		job4Id := uuid.New()
+		job4Name := fmt.Sprintf("%s_c_%s_e_%s_j_%s", "cc", computeId.String(), eventId.String(), job4Id.String())
+		job4 := Job{
+			ID:            job4Id,
+			EventID:       eventId,
+			ManifestID:    manifestId,
+			JobName:       job4Name,
+			JobQueue:      "",
+			JobDefinition: pluginName,
+			DependsOn:     []string{job2Id.String(), job3Id.String()},
+		}
+
+		event := SubmitJobsInput{
+			Jobs:            []*Job{&job1, &job2, &job3, &job4},
+			SubmissionIdMap: make(map[uuid.UUID]string),
+		}
+
+		err := argoservice.SubmitJobs(event)
+		submissionId := event.SubmissionIdMap[manifestId]
+		fmt.Println(submissionId)
+		assert.NoError(t, err, "Submit Jobs should succeed for the test job")
+	})
+}
+
 func TestArgoComputeProvider(t *testing.T) {
 	subTestArgoComputeProvider(t, false)
 }

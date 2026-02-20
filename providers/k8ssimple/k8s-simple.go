@@ -182,8 +182,8 @@ func (k *KubernetesComputeProvider) Status(jobQueue string, query JobsSummaryQue
 	return nil
 }
 
-func (k *KubernetesComputeProvider) JobLog(submittedJobId string, token *string) (JobLogOutput, error) {
-	podLogs, err := k.clientset.CoreV1().Pods(k.namespace).GetLogs(submittedJobId, &corev1.PodLogOptions{}).DoRaw(context.TODO())
+func (k *KubernetesComputeProvider) JobLog(input JobLogInput) (JobLogOutput, error) {
+	podLogs, err := k.clientset.CoreV1().Pods(k.namespace).GetLogs(input.VendorJobId, &corev1.PodLogOptions{}).DoRaw(context.TODO())
 	if err != nil {
 		return JobLogOutput{}, fmt.Errorf("failed to get pod logs: %v", err)
 	}

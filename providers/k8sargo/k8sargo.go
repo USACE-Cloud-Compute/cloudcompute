@@ -16,6 +16,7 @@ import (
 	workflowtemplatepb "github.com/argoproj/argo-workflows/v3/pkg/apiclient/workflowtemplate"
 	"github.com/argoproj/argo-workflows/v3/pkg/apis/workflow/v1alpha1"
 	wfv1 "github.com/argoproj/argo-workflows/v3/pkg/apis/workflow/v1alpha1"
+	"github.com/google/uuid"
 	cc "github.com/usace-cloud-compute/cloudcompute"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -100,6 +101,9 @@ func (a *ArgoWorkflowComputeProvider) SubmitJobs(input cc.SubmitJobsInput) error
 
 	//argo templates will store the DAG Task and template specs for the job definitions
 	templates := []v1alpha1.Template{}
+
+	//build the job dependency graph from the manifest dependencies
+	manifestDepsToJobDeps(input.Jobs)
 
 	for i, job := range input.Jobs {
 
@@ -565,6 +569,55 @@ func depsToArgoDeps(deps []string) []string {
 	}
 	return argoDeps
 }
+
+func manifestDepsToJobDeps(jobs []*cc.Job) {
+	for i, job := range jobs {
+		if len(job.ManifestDependencies) > 0 {
+			jobDependencies := make([]string, len(job.ManifestDependencies))
+			for k, manifestDependency := range job.ManifestDependencies {
+				id := getJobIdFromManifestId(manifestDependency, jobs)
+				jobDependencies[k] = id
+			}
+			jobs[i].DependsOn = jobDependencies
+		}
+	}
+}
+
+func getJobIdFromManifestId(manifestId uuid.UUID, jobs []*cc.Job) string {
+	for _, j := range jobs {
+		if j.ManifestID == manifestId {
+			return j.ID.String()
+		}
+	}
+	return ""
+}
+
+// func depsToArgoDeps(job *cc.Job, jobs []*cc.Job) []string {
+// 	if len(job.DependsOn) > 0 {
+// 		argoDeps := make([]string, len(job.DependsOn))
+// 		for i, dep := range job.DependsOn {
+// 			argoDeps[i] = fmt.Sprintf("e-%s", dep)
+// 		}
+// 		return argoDeps
+// 	} else if len(job.ManifestDependencies) > 0 {
+// 		argoDeps := make([]string, len(job.ManifestDependencies))
+// 		for i, dep := range job.ManifestDependencies {
+
+// 			argoDeps[i] = fmt.Sprintf("e-%s", dep.String())
+// 		}
+// 		return argoDeps
+// 	}
+// 	return []string{}
+// }
+
+// func getJobByManifest(manifestId uuid.UUID, jobs []*cc.Job) *cc.Job {
+// 	for i, j := range jobs {
+// 		if j.ManifestID == manifestId {
+// 			return jobs[i]
+// 		}
+// 	}
+// 	return nil
+// }
 
 func getResourceOrDefault(resources []cc.ResourceRequirement, resourceType cc.ResourceType, defaultVal string) string {
 	for _, resource := range resources {
