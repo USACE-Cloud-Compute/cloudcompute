@@ -1,4 +1,4 @@
-package cloudcompute
+package docker
 
 //@TODO change package to docker!!!!
 
@@ -12,6 +12,10 @@ import (
 
 	. "github.com/usace-cloud-compute/cloudcompute"
 )
+
+func TestSomething(t *testing.T) {
+	fmt.Println("asdfasdf")
+}
 
 func TestDockerConcurrency(t *testing.T) {
 	//first create the Docker Compute Provider with concurrency of 4

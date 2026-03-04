@@ -99,43 +99,100 @@ func NewAwsBatchProvider(input AwsBatchProviderInput) (*AwsBatchProvider, error)
 
 // SubmitJob submits a job to AWS Batch
 // It takes a Job struct and returns an error if submission fails
-func (abp *AwsBatchProvider) SubmitJob(job *Job) error {
-	var retryStrategy *types.RetryStrategy
-	var timeout *types.JobTimeout
+func (abp *AwsBatchProvider) SubmitJobs(event SubmitJobsInput) error {
+	//submissionIdMap := make(map[uuid.UUID]string)
+	for _, job := range event.Jobs {
+		var retryStrategy *types.RetryStrategy
+		var timeout *types.JobTimeout
 
-	if job.RetryAttemts > 0 {
-		retryStrategy = &types.RetryStrategy{Attempts: &job.RetryAttemts}
-	}
+		if job.RetryAttemts > 0 {
+			retryStrategy = &types.RetryStrategy{Attempts: &job.RetryAttemts}
+		}
 
-	if job.JobTimeout > 0 {
-		timeout = &types.JobTimeout{AttemptDurationSeconds: &job.JobTimeout}
-	}
+		if job.JobTimeout > 0 {
+			timeout = &types.JobTimeout{AttemptDurationSeconds: &job.JobTimeout}
+		}
 
-	input := &batch.SubmitJobInput{
-		JobDefinition:      &job.JobDefinition,
-		JobName:            &job.JobName,
-		JobQueue:           &job.JobQueue,
-		DependsOn:          toBatchDependency(job.DependsOn),
-		ContainerOverrides: toBatchContainerOverrides(job.ContainerOverrides),
-		Parameters:         job.Parameters,
-		Tags:               job.Tags,
-		RetryStrategy:      retryStrategy,
-		Timeout:            timeout,
-	}
+		job.DependsOn = event.MapDependencies(job)
 
-	submitResult, err := abp.client.SubmitJob(ctx, input)
-	if err != nil {
-		log.Printf("Failed to submit batch job: %s using definition %s on queue %s.\n", job.JobName, job.JobDefinition, job.JobQueue)
-		return err
-	}
+		submitJobInput := &batch.SubmitJobInput{
+			JobDefinition:      &job.JobDefinition,
+			JobName:            &job.JobName,
+			JobQueue:           &job.JobQueue,
+			DependsOn:          toBatchDependency(job.DependsOn),
+			ContainerOverrides: toBatchContainerOverrides(job.ContainerOverrides),
+			Parameters:         job.Parameters,
+			Tags:               job.Tags,
+			RetryStrategy:      retryStrategy,
+			Timeout:            timeout,
+		}
 
-	job.SubmittedJob = &SubmitJobResult{
-		JobId:        submitResult.JobId,
-		ResourceName: submitResult.JobArn,
+		submitResult, err := abp.client.SubmitJob(ctx, submitJobInput)
+		if err != nil {
+			log.Printf("Failed to submit batch job: %s using definition %s on queue %s.\n", job.JobName, job.JobDefinition, job.JobQueue)
+			return err
+		}
+
+		job.SubmittedJob = &SubmitJobResult{
+			JobId:        submitResult.JobId,
+			ResourceName: submitResult.JobArn,
+		}
+
+		//this is only used inside the jobs loop to map job dependencies
+		//between cc and aws batch
+		event.SubmissionIdMap[job.ManifestID] = *job.SubmittedJob.JobId
 	}
 
 	return nil
 }
+
+// func mapDependencies(job *Job, submissionIdMap map[uuid.UUID]string) []string {
+// 	sdeps := make([]string, len(job.ManifestDependencies))
+// 	for i, d := range job.ManifestDependencies {
+// 		if sdep, ok := submissionIdMap[d]; ok {
+// 			sdeps[i] = sdep
+// 		}
+// 	}
+// 	return sdeps
+// }
+
+// func (abp *AwsBatchProvider) SubmitJob(job *Job) error {
+// 	var retryStrategy *types.RetryStrategy
+// 	var timeout *types.JobTimeout
+
+// 	if job.RetryAttemts > 0 {
+// 		retryStrategy = &types.RetryStrategy{Attempts: &job.RetryAttemts}
+// 	}
+
+// 	if job.JobTimeout > 0 {
+// 		timeout = &types.JobTimeout{AttemptDurationSeconds: &job.JobTimeout}
+// 	}
+
+// 	input := &batch.SubmitJobInput{
+// 		JobDefinition:      &job.JobDefinition,
+// 		JobName:            &job.JobName,
+// 		JobQueue:           &job.JobQueue,
+// 		DependsOn:          toBatchDependency(job.DependsOn),
+// 		ContainerOverrides: toBatchContainerOverrides(job.ContainerOverrides),
+// 		Parameters:         job.Parameters,
+// 		Tags:               job.Tags,
+// 		RetryStrategy:      retryStrategy,
+// 		Timeout:            timeout,
+// 	}
+
+// 	submitResult, err := abp.client.SubmitJob(ctx, input)
+// 	if err != nil {
+// 		log.Printf("Failed to submit batch job: %s using definition %s on queue %s.\n", job.JobName, job.JobDefinition, job.JobQueue)
+// 		return err
+// 	}
+
+// 	job.SubmittedJob = &SubmitJobResult{
+// 		JobId:        submitResult.JobId,
+// 		ResourceName: submitResult.JobArn,
+// 	}
+
+// 	return nil
+// }
 
 // RegisterPlugin registers a plugin with AWS Batch
 // It creates a job definition for the plugin and returns a PluginRegistrationOutput
@@ -190,7 +247,6 @@ func (abp *AwsBatchProvider) UnregisterPlugin(nameAndRevision string) error {
 		JobDefinition: &nameAndRevision,
 	}
 	_, err := abp.client.DeregisterJobDefinition(ctx, &dji)
-	log.Printf("Unable to deregister AWS Batch Job: %s.  Error: %s\n", nameAndRevision, err)
 	return err
 }
 
@@ -371,14 +427,15 @@ func (abp *AwsBatchProvider) Status(jobQueue string, query JobsSummaryQuery) err
 // It takes a submitted job ID and an optional token for pagination
 // @TODO this assumes the logs are rather short.
 // Need to update for logs that require pagenation in the AWS SDK
-func (abp *AwsBatchProvider) JobLog(submittedJobId string, token *string) (JobLogOutput, error) {
+func (abp *AwsBatchProvider) JobLog(input JobLogInput) (JobLogOutput, error) {
 
+	token := input.ContinuationToken
 	//allow zero value in the call but set as nil for AWS
 	if token != nil && *token == "" {
 		token = nil
 	}
 
-	jobDesc, err := abp.describeBatchJobs([]string{submittedJobId})
+	jobDesc, err := abp.describeBatchJobs([]string{input.VendorJobId})
 	if err != nil {
 		return JobLogOutput{}, err
 	}

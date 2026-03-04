@@ -66,7 +66,7 @@ func (cc *CloudCompute) RunParallel(concurrency int) error {
 			continue
 		}
 
-		cr.Run(func() {
+		cr.Run(func(event Event) {
 
 			//start by sorting the manifests if necessary
 			if !event.sorted {
@@ -97,7 +97,9 @@ func (cc *CloudCompute) RunParallel(concurrency int) error {
 
 			event.submissionIdMap = make(map[uuid.UUID]string) //reduce the scope of the idmap to a single event
 
-			for _, manifest := range event.Manifests {
+			manifestJobs := make([]*Job, len(event.Manifests))
+
+			for i, manifest := range event.Manifests {
 				if len(manifest.Inputs.PayloadAttributes) > 0 || len(manifest.Inputs.DataSources) > 0 || len(manifest.Actions) > 0 { //@TODO...ADD OUTPUT DATA SOURCES
 					err := manifest.WritePayload() //guarantees the payload is written to the manifest
 					if err != nil {
@@ -129,39 +131,64 @@ func (cc *CloudCompute) RunParallel(concurrency int) error {
 
 				jobID := uuid.New()
 				job := Job{
-					ID:         jobID,
-					EventID:    event.ID,
-					ManifestID: manifest.ManifestID,
+					ID:              jobID,
+					EventID:         event.ID,
+					PerEventLoopNum: event.PerEventLoopNum,
+					ManifestID:      manifest.ManifestID,
+					PayloadID:       manifest.payloadID,
 					//JobName:       fmt.Sprintf("%s_C_%s_E_%s_J_%s", CcProfile, cc.ID.String(), event.ID.String(), jobID),
-					JobName:       fmt.Sprintf("%s_c_%s_e_%s_j_%s", strings.ToLower(CcProfile), cc.ID.String(), event.ID.String(), jobID),
-					JobQueue:      cc.JobQueue,
-					JobDefinition: manifest.PluginDefinition,
-					DependsOn:     event.mapDependencies(&manifest),
-					Parameters:    manifest.Inputs.Parameters,
-					Tags:          manifest.Tags,
-					RetryAttemts:  manifest.RetryAttemts,
-					JobTimeout:    manifest.JobTimeout,
+					JobName:              fmt.Sprintf("%s_c_%s_e_%s_j_%s", strings.ToLower(CcProfile), cc.ID.String(), event.ID.String(), jobID),
+					JobQueue:             cc.JobQueue,
+					JobDefinition:        manifest.PluginDefinition,
+					ManifestDependencies: manifest.Dependencies, //dependenciesToStrings(&manifest),
+					Parameters:           manifest.Inputs.Parameters,
+					Tags:                 manifest.Tags,
+					RetryAttemts:         manifest.RetryAttemts,
+					JobTimeout:           manifest.JobTimeout,
 					ContainerOverrides: ContainerOverrides{
 						Environment:          env,
 						Command:              manifest.Command,
 						ResourceRequirements: manifest.ResourceRequirements,
 					},
 				}
-				err := cc.ComputeProvider.SubmitJob(&job)
-				if err != nil {
-					log.Printf("error submitting job for event %s: %s:\n", event.EventIdentifier, err)
-					return //@TODO what happens if a set submit ok then one fails?  How do we cancel? See notes below
-				}
-				if cc.JobStore != nil {
-					err := cc.JobStore.SaveJob(cc.ID, manifest.payloadID, event.EventIdentifier, &job)
+
+				manifestJobs[i] = &job
+
+				///////////////////////////////////////////
+				// err := cc.ComputeProvider.SubmitJob(&job)
+				// if err != nil {
+				// 	log.Printf("error submitting job for event %s: %s:\n", event.EventIdentifier, err)
+				// 	return //@TODO what happens if a set submit ok then one fails?  How do we cancel? See notes below
+				// }
+				// if cc.JobStore != nil {
+				// 	err := cc.JobStore.SaveJob(cc.ID, manifest.payloadID, event.EventIdentifier, &job)
+				// 	if err != nil {
+				// 		log.Printf("error saving job for event %s: %s:\n", event.EventIdentifier, err)
+				// 		return //@TODO should we terminate everything if we cannot save to the compute store?
+				// 	}
+				// }
+				// event.submissionIdMap[manifest.ManifestID] = *job.SubmittedJob.JobId
+				////////////////////////////////////////////
+			}
+			err := cc.ComputeProvider.SubmitJobs(SubmitJobsInput{
+				Jobs:            manifestJobs,
+				SubmissionIdMap: make(map[uuid.UUID]string),
+			})
+			if err != nil {
+				log.Printf("error submitting job for event %s: %s:\n", event.EventIdentifier, err)
+				return //@TODO what happens if a set submit ok then one fails?  How do we cancel? See notes below
+			}
+			if cc.JobStore != nil {
+				for _, job := range manifestJobs {
+					err := cc.JobStore.SaveJob(cc.ID, job.PayloadID, event.EventIdentifier, job)
 					if err != nil {
 						log.Printf("error saving job for event %s: %s:\n", event.EventIdentifier, err)
 						return //@TODO should we terminate everything if we cannot save to the compute store?
 					}
 				}
-				event.submissionIdMap[manifest.ManifestID] = *job.SubmittedJob.JobId
 			}
-		})
+
+		}, event)
 
 		//if this was the last event, break out of the event loop
 		if !hasNext {
@@ -305,7 +332,8 @@ type PluginInputs struct {
 
 // EVENT is a single run through the DAG
 type Event struct {
-	ID              uuid.UUID         `json:"id"`
+	ID              uuid.UUID `json:"id"`
+	PerEventLoopNum int
 	EventIdentifier string            `json:"event"` //RULES ONLY NUMBERS, STRINGS, DASH, AND UNDERSCORE
 	Manifests       []ComputeManifest `json:"manifests"`
 
@@ -330,15 +358,24 @@ func (e *Event) AddManifestAt(m ComputeManifest, i int) {
 }
 
 // Maps the Dependency identifiers to the compute environment identifiers received from submitted jobs.
-func (e *Event) mapDependencies(manifest *ComputeManifest) []string {
-	sdeps := make([]string, len(manifest.Dependencies))
-	for i, d := range manifest.Dependencies {
-		if sdep, ok := e.submissionIdMap[d]; ok {
-			sdeps[i] = sdep
-		}
-	}
-	return sdeps
-}
+// func (e *Event) mapDependencies(manifest *ComputeManifest) []string {
+// 	sdeps := make([]string, len(manifest.Dependencies))
+// 	for i, d := range manifest.Dependencies {
+// 		if sdep, ok := e.submissionIdMap[d]; ok {
+// 			sdeps[i] = sdep
+// 		}
+// 	}
+// 	return sdeps
+// }
+
+// // Maps the Dependency identifiers to the compute environment identifiers received from submitted jobs.
+// func dependenciesToStrings(manifest *ComputeManifest) []string {
+// 	sdeps := make([]string, len(manifest.Dependencies))
+// 	for i, d := range manifest.Dependencies {
+// 		sdeps[i] = d.String()
+// 	}
+// 	return sdeps
+// }
 
 /////////////////////////////
 ///////// PLUGIN ////////////
@@ -382,7 +419,7 @@ type MountPoint struct {
 
 type PluginComputeEnvironment struct {
 	VCPU       string   `json:"vcpu" jsonschema:"title=Virtual CPUs"`
-	Memory     string   `json:"memory" jsonschema:"title=Memory in MB"`
+	Memory     string   `json:"memory" jsonschema:"title=Memory in MiB"`
 	ExtraHosts []string `json:"extraHosts" jsonschema:"title=Extra Hosts for the Docker API"`
 }
 
@@ -424,13 +461,13 @@ func NewConcurrentRunner(limit int) *ConcurrentRunner {
 	}
 }
 
-func (cr *ConcurrentRunner) Run(cf func()) {
+func (cr *ConcurrentRunner) Run(cf func(event Event), event Event) {
 	cr.semaphore <- struct{}{}
 	go func() {
 		defer func() {
 			<-cr.semaphore
 		}()
-		cf()
+		cf(event)
 	}()
 }
 

@@ -2,6 +2,7 @@ package cloudcompute
 
 import (
 	"errors"
+	"io"
 	"regexp"
 
 	"github.com/google/uuid"
@@ -65,19 +66,47 @@ type TerminateJobOutput struct {
 // function to process the results of each job termination
 type TerminateJobFunction func(output TerminateJobOutput)
 
+type SubmitJobOptions struct {
+	SubmitEvent bool
+}
+
+type SubmitJobsInput struct {
+	Jobs            []*Job
+	SubmissionIdMap map[uuid.UUID]string
+}
+
+func (se *SubmitJobsInput) MapDependencies(job *Job) []string {
+	sdeps := make([]string, len(job.ManifestDependencies))
+	for i, d := range job.ManifestDependencies {
+		if sdep, ok := se.SubmissionIdMap[d]; ok {
+			sdeps[i] = sdep
+		}
+	}
+	return sdeps
+}
+
 // Interface for a compute provider.
 type ComputeProvider interface {
-	SubmitJob(job *Job) error
+	SubmitJobs(input SubmitJobsInput) error
+	//SubmitJobs(input Event) error
 	TerminateJobs(input TerminateJobInput) error
 	Status(jobQueue string, query JobsSummaryQuery) error
-	JobLog(submittedJobId string, token *string) (JobLogOutput, error)
+	//JobLog(submittedJobId string, token *string) (JobLogOutput, error)
+	JobLog(input JobLogInput) (JobLogOutput, error)
 	RegisterPlugin(plugin *Plugin) (PluginRegistrationOutput, error)
 	UnregisterPlugin(nameAndRevision string) error
 }
 
+type JobLogInput struct {
+	VendorJobId       string
+	AltId             string
+	ContinuationToken *string
+}
+
 type JobLogOutput struct {
-	Logs  []string
-	Token *string
+	Logs      []string
+	LogStream io.Reader
+	Token     *string
 }
 
 // Overrides the container command or environment from the base values
@@ -96,19 +125,43 @@ type ResourceRequirement struct {
 // This is a single "job" or unit of compute for a ComputeProvider
 // Essentually it is a mapping of a single Manifest
 type Job struct {
-	ID                 uuid.UUID
-	EventID            uuid.UUID
-	ManifestID         uuid.UUID
-	JobName            string
-	JobQueue           string
-	JobDefinition      string
-	ContainerOverrides ContainerOverrides
-	DependsOn          []string //compute provider dependencies
-	Parameters         map[string]string
-	Tags               map[string]string
-	RetryAttemts       int32
-	JobTimeout         int32            //duration in seconds
-	SubmittedJob       *SubmitJobResult //reference to the job information from the compute environment
+	ID                   uuid.UUID
+	EventID              uuid.UUID
+	PerEventLoopNum      int
+	ManifestID           uuid.UUID
+	PayloadID            uuid.UUID
+	JobName              string
+	JobQueue             string
+	JobDefinition        string
+	ContainerOverrides   ContainerOverrides
+	DependsOn            []string
+	ManifestDependencies []uuid.UUID
+	Parameters           map[string]string
+	Tags                 map[string]string
+	RetryAttemts         int32
+	JobTimeout           int32            //duration in seconds
+	SubmittedJob         *SubmitJobResult //reference to the job information from the compute environment
+}
+
+func (j *Job) ToVendorJob() VendorJob {
+	return SubmittedVendorJob{
+		SubmittedJobId: *j.SubmittedJob.JobId,
+		JobName:        j.JobName,
+	}
+}
+
+// implementation of Vendor Job over the Job struct
+type SubmittedVendorJob struct {
+	SubmittedJobId string
+	JobName        string
+}
+
+func (svj SubmittedVendorJob) ID() string {
+	return svj.SubmittedJobId
+}
+
+func (svj SubmittedVendorJob) Name() string {
+	return svj.JobName
 }
 
 // Vendor job data used for terminating jobs on the vendor's compute environment

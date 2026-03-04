@@ -1,4 +1,4 @@
-package cloudcompute
+package docker
 
 import (
 	"sync"
@@ -150,9 +150,11 @@ type JobDeps []*DockerJob
 
 func (jds JobDeps) hasUnfinishedDependencies() bool {
 	for _, jd := range jds {
-		for _, status := range unfinishedDepStatusList {
-			if status == jd.Status {
-				return true
+		if jd != nil {
+			for _, status := range unfinishedDepStatusList {
+				if status == jd.Status {
+					return true
+				}
 			}
 		}
 	}

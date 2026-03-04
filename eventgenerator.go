@@ -100,10 +100,12 @@ func (seg *StreamingEventGenerator) NextEvent() (Event, bool, error) {
 	} else {
 		var additionalEnvVars map[string]string
 		incrementEvent := true
+		pos := 0
 
 		if seg.perEventLooper != nil {
-			additionalEnvVars, incrementEvent = seg.perEventLooper.Next()
+			additionalEnvVars, incrementEvent, pos = seg.perEventLooper.Next()
 			event.AdditionalEventEnvVars = MapToKeyValuePairs(additionalEnvVars)
+			event.PerEventLoopNum = pos
 		}
 		event.EventIdentifier = seg.eventId
 
@@ -141,15 +143,15 @@ func NewPerEventLooper(pel []map[string]string) *PerEventLooper {
 	}
 }
 
-func (pel *PerEventLooper) Next() (envVars map[string]string, incrementEvent bool) {
+func (pel *PerEventLooper) Next() (envVars map[string]string, incrementEvent bool, perEventLoopPos int) {
 	if pel.perEventLoopPosition < pel.perEventLoops-1 {
 		pos := pel.perEventLoopPosition
 		pel.perEventLoopPosition++
-		return pel.perEventLoopData[pos], false
+		return pel.perEventLoopData[pos], false, pos
 	} else {
 		pos := pel.perEventLoopPosition
 		pel.perEventLoopPosition = 0
-		return pel.perEventLoopData[pos], true
+		return pel.perEventLoopData[pos], true, pos
 	}
 }
 
@@ -212,9 +214,11 @@ func (aeg *ArrayEventGenerator) NextEvent() (Event, bool, error) {
 	event := aeg.event
 	var additionalEnvVars map[string]string
 	incrementEvent := true
+	pos := 0 //per event loop position
 	if aeg.pel != nil {
-		additionalEnvVars, incrementEvent = aeg.pel.Next()
+		additionalEnvVars, incrementEvent, pos = aeg.pel.Next()
 		event.AdditionalEventEnvVars = MapToKeyValuePairs(additionalEnvVars)
+		event.PerEventLoopNum = pos
 	}
 	event.EventIdentifier = strconv.Itoa(int(aeg.position))
 	hasNext := true
@@ -248,10 +252,10 @@ func NewEventList(events []Event) *EventList {
 func (el *EventList) NextEvent() (Event, bool, error) {
 	el.mu.Lock()
 	defer el.mu.Unlock()
-	hasNext := el.currentEvent < len(el.events)
-	if !hasNext {
-		return Event{}, hasNext, nil
-	}
+	hasNext := el.currentEvent < len(el.events)-1
+	// if !hasNext {
+	// 	return Event{}, hasNext, nil
+	//}
 	event := el.events[el.currentEvent]
 	if event.EventIdentifier == "" {
 		event.EventIdentifier = strconv.Itoa(el.currentEvent)
