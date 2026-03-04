@@ -127,6 +127,7 @@ type ResourceRequirement struct {
 type Job struct {
 	ID                   uuid.UUID
 	EventID              uuid.UUID
+	PerEventLoopNum      int
 	ManifestID           uuid.UUID
 	PayloadID            uuid.UUID
 	JobName              string

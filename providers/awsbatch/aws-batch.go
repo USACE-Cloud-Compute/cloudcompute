@@ -138,8 +138,9 @@ func (abp *AwsBatchProvider) SubmitJobs(event SubmitJobsInput) error {
 			ResourceName: submitResult.JobArn,
 		}
 
+		//this is only used inside the jobs loop to map job dependencies
+		//between cc and aws batch
 		event.SubmissionIdMap[job.ManifestID] = *job.SubmittedJob.JobId
-
 	}
 
 	return nil

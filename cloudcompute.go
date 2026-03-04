@@ -131,10 +131,11 @@ func (cc *CloudCompute) RunParallel(concurrency int) error {
 
 				jobID := uuid.New()
 				job := Job{
-					ID:         jobID,
-					EventID:    event.ID,
-					ManifestID: manifest.ManifestID,
-					PayloadID:  manifest.payloadID,
+					ID:              jobID,
+					EventID:         event.ID,
+					PerEventLoopNum: event.PerEventLoopNum,
+					ManifestID:      manifest.ManifestID,
+					PayloadID:       manifest.payloadID,
 					//JobName:       fmt.Sprintf("%s_C_%s_E_%s_J_%s", CcProfile, cc.ID.String(), event.ID.String(), jobID),
 					JobName:              fmt.Sprintf("%s_c_%s_e_%s_j_%s", strings.ToLower(CcProfile), cc.ID.String(), event.ID.String(), jobID),
 					JobQueue:             cc.JobQueue,
@@ -331,7 +332,8 @@ type PluginInputs struct {
 
 // EVENT is a single run through the DAG
 type Event struct {
-	ID              uuid.UUID         `json:"id"`
+	ID              uuid.UUID `json:"id"`
+	PerEventLoopNum int
 	EventIdentifier string            `json:"event"` //RULES ONLY NUMBERS, STRINGS, DASH, AND UNDERSCORE
 	Manifests       []ComputeManifest `json:"manifests"`
 

@@ -95,6 +95,10 @@ func (a *ArgoWorkflowComputeProvider) SubmitJobs(input cc.SubmitJobsInput) error
 	//within the argo environment, events will be submitted as s single workflow
 	//the event id will be used for the workflow name
 	eventId := input.Jobs[0].EventID.String()
+	workflowName := eventId
+	if input.Jobs[0].PerEventLoopNum > 0 {
+		workflowName += fmt.Sprintf(".%d", input.Jobs[0].PerEventLoopNum)
+	}
 
 	//for each job in the cloud compute event, we create an argo DAG Task
 	tasks := make([]v1alpha1.DAGTask, len(input.Jobs))
@@ -152,35 +156,45 @@ func (a *ArgoWorkflowComputeProvider) SubmitJobs(input cc.SubmitJobsInput) error
 			}
 		}
 
+		//Dag Task Specific Parameters
+		dagTaskParameters := []v1alpha1.Parameter{}
+
 		//marshall to json so that the env vars can be merged into the podSpecPatch
 		envJson, err := json.Marshal(tmplEnv)
 		if err != nil {
 			return err
 		}
+		dagTaskParameters = append(dagTaskParameters, v1alpha1.Parameter{
+			Name:  "DagTaskEnv",
+			Value: v1alpha1.AnyStringPtr(string(envJson)),
+		})
 
-		vcpu := getResourceOrDefault(job.ContainerOverrides.ResourceRequirements, cc.ResourceTypeVcpu, "1")
-		memory := getResourceOrDefault(job.ContainerOverrides.ResourceRequirements, cc.ResourceTypeMemory, "256Mi")
+		for _, resourceRequirement := range job.ContainerOverrides.ResourceRequirements {
+
+			switch resourceRequirement.Type {
+			case cc.ResourceTypeVcpu:
+				//vcpu := getResourceOrDefault(job.ContainerOverrides.ResourceRequirements, cc.ResourceTypeVcpu, "1")
+				dagTaskParameters = append(dagTaskParameters, v1alpha1.Parameter{
+					Name:  "VCPU",
+					Value: v1alpha1.AnyStringPtr(resourceRequirement.Value),
+				})
+			case cc.ResourceTypeMemory:
+				//memory := getResourceOrDefault(job.ContainerOverrides.ResourceRequirements, cc.ResourceTypeMemory, "1240Mi")
+				dagTaskParameters = append(dagTaskParameters, v1alpha1.Parameter{
+					Name:  "Memory",
+					Value: v1alpha1.AnyStringPtr(resourceRequirement.Value),
+				})
+			}
+		}
 
 		//start building the DAG Task
+		submittedJobName := fmt.Sprintf("j-%s", job.ID.String())
 		dagTask := v1alpha1.DAGTask{
-			Name:         fmt.Sprintf("e-%s", job.ID.String()),
+			Name:         submittedJobName,
 			Template:     job.JobDefinition,
 			Dependencies: depsToArgoDeps(job.DependsOn),
 			Arguments: v1alpha1.Arguments{
-				Parameters: []v1alpha1.Parameter{
-					{
-						Name:  "VCPU",
-						Value: v1alpha1.AnyStringPtr(vcpu),
-					},
-					{
-						Name:  "Memory",
-						Value: v1alpha1.AnyStringPtr(memory),
-					},
-					{
-						Name:  "DagTaskEnv",
-						Value: v1alpha1.AnyStringPtr(string(envJson)),
-					},
-				},
+				Parameters: dagTaskParameters,
 			},
 		}
 
@@ -210,12 +224,15 @@ func (a *ArgoWorkflowComputeProvider) SubmitJobs(input cc.SubmitJobsInput) error
 		}
 
 		tasks[i] = dagTask
+		job.SubmittedJob = &cc.SubmitJobResult{
+			JobId: &submittedJobName,
+		}
 	}
 
 	//create the workflow which will run the event
 	wf := &v1alpha1.Workflow{
 		ObjectMeta: metav1.ObjectMeta{
-			Name:      eventId,
+			Name:      workflowName,
 			Namespace: *a.namespace,
 		},
 		Spec: v1alpha1.WorkflowSpec{
