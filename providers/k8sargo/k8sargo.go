@@ -24,7 +24,10 @@ import (
 )
 
 const (
-	defaultNamespace string = "argo"
+	templateEntrypointName string = "cc-entrypoint"
+	defaultNamespace       string = "argo"
+	computeLabel           string = "compute"
+	eventLabel             string = "event"
 )
 
 type ArgoWorkflowComputeProviderConfig struct {
@@ -94,6 +97,7 @@ func (a *ArgoWorkflowComputeProvider) SubmitJobs(input cc.SubmitJobsInput) error
 
 	//within the argo environment, events will be submitted as s single workflow
 	//the event id will be used for the workflow name
+	//computeId:=input.Jobs[0].
 	eventId := input.Jobs[0].EventID.String()
 	workflowName := eventId
 	if input.Jobs[0].PerEventLoopNum > 0 {
@@ -138,6 +142,7 @@ func (a *ArgoWorkflowComputeProvider) SubmitJobs(input cc.SubmitJobsInput) error
 			for _, specTmpl := range wft.Spec.Templates {
 				if specTmpl.Name == job.JobDefinition {
 					template = specTmpl.DeepCopy()
+					template.Metadata.Annotations = job.Tags
 					templates = append(templates, *template)
 				}
 			}
@@ -234,17 +239,22 @@ func (a *ArgoWorkflowComputeProvider) SubmitJobs(input cc.SubmitJobsInput) error
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      workflowName,
 			Namespace: *a.namespace,
+			Labels: map[string]string{
+				computeLabel: input.ComputeId.String(),
+				eventLabel:   eventId,
+			},
 		},
 		Spec: v1alpha1.WorkflowSpec{
-			Entrypoint: "cc-entrypoint",
+			Entrypoint: templateEntrypointName,
 			Templates: []v1alpha1.Template{
 				{
-					Name: "cc-entrypoint",
+					Name: templateEntrypointName,
 					DAG: &v1alpha1.DAGTemplate{
 						Tasks: tasks,
 					},
 				},
 			},
+			//@TODO::NodeSelector here when ready
 		},
 	}
 
@@ -351,13 +361,49 @@ func (a *ArgoWorkflowComputeProvider) JobLog(input cc.JobLogInput) (cc.JobLogOut
 // @TODO NOT WORKING OR TESTED
 func (a *ArgoWorkflowComputeProvider) TerminateJobs(input cc.TerminateJobInput) error {
 
-	_, err := a.serviceClient.TerminateWorkflow(context.Background(), &workflow.WorkflowTerminateRequest{
-		Name:      "test",
+	listReq := &workflowpkg.WorkflowListRequest{
 		Namespace: *a.namespace,
-	})
-	if err != nil {
-		return fmt.Errorf("failed to terminate: %v", err)
+		ListOptions: &metav1.ListOptions{
+			LabelSelector: fmt.Sprintf("%s=%s", computeLabel, input.Query.QueryValue.Compute),
+		},
 	}
+
+	workflowList, err := a.serviceClient.ListWorkflows(a.ctx, listReq)
+	if err != nil {
+		return err
+	}
+
+	for _, workflow := range workflowList.Items {
+		// terminateReq := &workflowpkg.WorkflowTerminateRequest{
+		// 	Name:      workflow.Name,
+		// 	Namespace: *a.namespace,
+		// }
+		// _, err := a.serviceClient.TerminateWorkflow(a.ctx, terminateReq)
+		// if err != nil {
+		// 	// Handle individual termination error
+		// 	fmt.Println(err)
+		// 	continue
+		// }
+
+		stopReq := &workflowpkg.WorkflowStopRequest{
+			Name:      workflow.Name,
+			Namespace: *a.namespace,
+			// Target the specific node where the input parameter 'task-guid' matches your ID
+			//NodeFieldSelector: "inputs.parameters.task-guid.value=" + guid,
+			Message: "Stopping Compute because i screwed up",
+		}
+
+		_, err := a.serviceClient.StopWorkflow(a.ctx, stopReq)
+		log.Println(err)
+	}
+
+	// _, err := a.serviceClient.TerminateWorkflow(context.Background(), &workflow.WorkflowTerminateRequest{
+	// 	Name:      "test",
+	// 	Namespace: *a.namespace,
+	// })
+	// if err != nil {
+	// 	return fmt.Errorf("failed to terminate: %v", err)
+	// }
 	return nil
 }
 

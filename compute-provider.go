@@ -71,6 +71,7 @@ type SubmitJobOptions struct {
 }
 
 type SubmitJobsInput struct {
+	ComputeId       uuid.UUID
 	Jobs            []*Job
 	SubmissionIdMap map[uuid.UUID]string
 }
