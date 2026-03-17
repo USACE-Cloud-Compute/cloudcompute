@@ -20,8 +20,13 @@ const (
 
 	SUMMARY_COMPUTE string = "COMPUTE"
 	SUMMARY_EVENT   string = "EVENT"
-	//SUMMARY_MANIFEST string = "MANIFEST"
-	SUMMARY_JOB string = "JOB"
+	SUMMARY_JOB     string = "JOB"
+
+	STATUS_RUNNING   string = "RUNNING"
+	STATUS_SUBMITTED string = "SUBMITTED"
+	STATUS_PENDING   string = "PENDING"
+	STATUS_STARTING  string = "STARTING"
+	STATUS_RUNNABLE  string = "RUNNABLE"
 
 	AWSBATCH    ComputeProviderType = 0
 	LOCALDOCKER ComputeProviderType = 1
@@ -102,6 +107,7 @@ type JobLogInput struct {
 	VendorJobId       string
 	AltId             string
 	ContinuationToken *string
+	EventId           string //required by k8s-argo
 }
 
 type JobLogOutput struct {
@@ -139,7 +145,7 @@ type Job struct {
 	ManifestDependencies []uuid.UUID
 	Parameters           map[string]string
 	Tags                 map[string]string
-	RetryAttemts         int32
+	RetryAttempts        int32
 	JobTimeout           int32            //duration in seconds
 	SubmittedJob         *SubmitJobResult //reference to the job information from the compute environment
 }
@@ -202,28 +208,28 @@ type JobSummaryFunction func(summaries []JobSummary)
 
 type JobSummary struct {
 	//identifier for the compute environment being used.  e.g. AWS Batch Job ID
-	JobId string
+	JobId string `json:"jobid"`
 
 	//cloud compute job name
-	JobName string
+	JobName string `json:"jobname"`
 
 	//unix timestamp in milliseconds for when the job was created
-	CreatedAt *int64
+	CreatedAt *int64 `json:"created_at"`
 
 	//unix timestamp in milliseconds for when the job was started
-	StartedAt *int64
+	StartedAt *int64 `json:"started_at"`
 
 	//status string value
-	Status string
+	Status string `json:"status"`
 
 	//human readable string of the status
-	StatusDetail *string
+	StatusDetail *string `json:"status_detail"`
 
 	//unix timestamp in milliseconds for when the job was stopped
-	StoppedAt *int64
+	StoppedAt *int64 `json:"stopped_at"`
 
 	//Compute Vendor resource name for the job.  e.g. the Job ARN for AWS
-	ResourceName string
+	ResourceName string `json:"resource_name"`
 }
 
 func (js JobSummary) ID() string {

@@ -144,7 +144,7 @@ func TestDockerHelloWorld(t *testing.T) {
 	for jobsRunning {
 		time.Sleep(1 * time.Second)
 		compute.Status(JobsSummaryQuery{
-			QueryLevel: "COMPUTE",
+			QueryLevel: SUMMARY_COMPUTE,
 			QueryValue: JobNameParts{
 				Compute: compute.ID.String(),
 			},
@@ -222,14 +222,14 @@ func TestDocker(t *testing.T) {
 	for jobsRunning {
 		time.Sleep(1 * time.Second)
 		compute.Status(JobsSummaryQuery{
-			QueryLevel: "COMPUTE",
+			QueryLevel: SUMMARY_COMPUTE,
 			QueryValue: JobNameParts{
 				Compute: compute.ID.String(),
 			},
 			JobSummaryFunction: func(summaries []JobSummary) {
 				count := 0
 				for _, summary := range summaries {
-					if summary.Status == "RUNNING" {
+					if summary.Status == STATUS_RUNNING {
 						count++
 					}
 				}

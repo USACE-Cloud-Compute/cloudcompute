@@ -135,7 +135,7 @@ type Job struct {
     ManifestDependencies []uuid.UUID
     Parameters           map[string]string
     Tags                 map[string]string
-    RetryAttemts         int32
+    RetryAttempts         int32
     JobTimeout           int32            //duration in seconds
     SubmittedJob         *SubmitJobResult //reference to the job information from the compute environment
 }

@@ -105,8 +105,8 @@ func (abp *AwsBatchProvider) SubmitJobs(event SubmitJobsInput) error {
 		var retryStrategy *types.RetryStrategy
 		var timeout *types.JobTimeout
 
-		if job.RetryAttemts > 0 {
-			retryStrategy = &types.RetryStrategy{Attempts: &job.RetryAttemts}
+		if job.RetryAttempts > 0 {
+			retryStrategy = &types.RetryStrategy{Attempts: &job.RetryAttempts}
 		}
 
 		if job.JobTimeout > 0 {
@@ -145,54 +145,6 @@ func (abp *AwsBatchProvider) SubmitJobs(event SubmitJobsInput) error {
 
 	return nil
 }
-
-// func mapDependencies(job *Job, submissionIdMap map[uuid.UUID]string) []string {
-// 	sdeps := make([]string, len(job.ManifestDependencies))
-// 	for i, d := range job.ManifestDependencies {
-// 		if sdep, ok := submissionIdMap[d]; ok {
-// 			sdeps[i] = sdep
-// 		}
-// 	}
-// 	return sdeps
-// }
-
-// func (abp *AwsBatchProvider) SubmitJob(job *Job) error {
-// 	var retryStrategy *types.RetryStrategy
-// 	var timeout *types.JobTimeout
-
-// 	if job.RetryAttemts > 0 {
-// 		retryStrategy = &types.RetryStrategy{Attempts: &job.RetryAttemts}
-// 	}
-
-// 	if job.JobTimeout > 0 {
-// 		timeout = &types.JobTimeout{AttemptDurationSeconds: &job.JobTimeout}
-// 	}
-
-// 	input := &batch.SubmitJobInput{
-// 		JobDefinition:      &job.JobDefinition,
-// 		JobName:            &job.JobName,
-// 		JobQueue:           &job.JobQueue,
-// 		DependsOn:          toBatchDependency(job.DependsOn),
-// 		ContainerOverrides: toBatchContainerOverrides(job.ContainerOverrides),
-// 		Parameters:         job.Parameters,
-// 		Tags:               job.Tags,
-// 		RetryStrategy:      retryStrategy,
-// 		Timeout:            timeout,
-// 	}
-
-// 	submitResult, err := abp.client.SubmitJob(ctx, input)
-// 	if err != nil {
-// 		log.Printf("Failed to submit batch job: %s using definition %s on queue %s.\n", job.JobName, job.JobDefinition, job.JobQueue)
-// 		return err
-// 	}
-
-// 	job.SubmittedJob = &SubmitJobResult{
-// 		JobId:        submitResult.JobId,
-// 		ResourceName: submitResult.JobArn,
-// 	}
-
-// 	return nil
-// }
 
 // RegisterPlugin registers a plugin with AWS Batch
 // It creates a job definition for the plugin and returns a PluginRegistrationOutput
@@ -469,15 +421,6 @@ func (abp *AwsBatchProvider) JobLog(input JobLogInput) (JobLogOutput, error) {
 	}, nil
 }
 
-// func (abp *AwsBatchProvider) listBatchJob(job *Job) (*batch.ListJobsOutput, error) {
-// 	input := batch.ListJobsInput{
-// 		JobQueue:  &job.JobQueue,
-// 		JobStatus: types.JobStatusSucceeded,
-// 	}
-
-// 	return abp.client.ListJobs(ctx, &input)
-// }
-
 // describeBatchJobs describes the specified batch jobs
 // It takes a slice of job IDs and returns the job descriptions
 func (abp *AwsBatchProvider) describeBatchJobs(submittedJobIds []string) (*batch.DescribeJobsOutput, error) {
@@ -604,22 +547,3 @@ func paramsMapToKvp(params map[string]string) []types.KeyValuePair {
 	}
 	return pout
 }
-
-/*
-func volumesToBatch(volumes []PluginComputeVolumes) ([]types.MountPoint, []types.Volume) {
-	mps := make([]types.MountPoint, len(volumes))
-	bvs:=make([]types.Volume,len(volumes))
-	for i, v := range volumes {
-		mps[i] = types.MountPoint{
-			ContainerPath: &v.MountPoint,
-			ReadOnly:      &v.ReadOnly,
-			SourceVolume:  &v.ResourceName,
-		}
-		bvs[i]=types.Volume{
-			Name: &v.Name,
-			EfsVolumeConfiguration: ,
-		}
-	}
-	return mps
-}
-*/

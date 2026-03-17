@@ -162,7 +162,7 @@ func (cc *CloudCompute) RunParallel(concurrency int) error {
 					ManifestDependencies: manifest.Dependencies, //dependenciesToStrings(&manifest),
 					Parameters:           manifest.Inputs.Parameters,
 					Tags:                 manifest.Tags,
-					RetryAttemts:         manifest.RetryAttemts,
+					RetryAttempts:        manifest.RetryAttempts,
 					JobTimeout:           manifest.JobTimeout,
 					ContainerOverrides: ContainerOverrides{
 						Environment:          env,
@@ -173,21 +173,6 @@ func (cc *CloudCompute) RunParallel(concurrency int) error {
 
 				manifestJobs[i] = &job
 
-				///////////////////////////////////////////
-				// err := cc.ComputeProvider.SubmitJob(&job)
-				// if err != nil {
-				// 	log.Printf("error submitting job for event %s: %s:\n", event.EventIdentifier, err)
-				// 	return //@TODO what happens if a set submit ok then one fails?  How do we cancel? See notes below
-				// }
-				// if cc.JobStore != nil {
-				// 	err := cc.JobStore.SaveJob(cc.ID, manifest.payloadID, event.EventIdentifier, &job)
-				// 	if err != nil {
-				// 		log.Printf("error saving job for event %s: %s:\n", event.EventIdentifier, err)
-				// 		return //@TODO should we terminate everything if we cannot save to the compute store?
-				// 	}
-				// }
-				// event.submissionIdMap[manifest.ManifestID] = *job.SubmittedJob.JobId
-				////////////////////////////////////////////
 			}
 			err := cc.ComputeProvider.SubmitJobs(SubmitJobsInput{
 				ComputeId:       cc.ID,
@@ -254,7 +239,7 @@ type ComputeManifest struct {
 	Actions              []Action              `json:"actions,omitempty" jsonschema:"title=Actions"`
 	PluginDefinition     string                `json:"plugin_definition,omitempty" jsonschema:"title=Plugin Definition"` //plugin resource name. "name:version"
 	Tags                 map[string]string     `json:"tags,omitempty" jsonschema:"title=Tags"`
-	RetryAttemts         int32                 `json:"retry_attempts,omitempty" jsonschema:"title=Retry Attempts Override"`
+	RetryAttempts        int32                 `json:"retry_attempts,omitempty" jsonschema:"title=Retry Attempts Override"`
 	JobTimeout           int32                 `json:"job_timeout,omitempty" jsonschema:"title=Job Timeout Override"`
 	ResourceRequirements []ResourceRequirement `json:"resource_requirements,omitempty" jsonschema:"title=Resource Requirement Overrides"`
 	payloadID            uuid.UUID             `json:"-"`
@@ -382,26 +367,6 @@ func (e *Event) AddManifestAt(m ComputeManifest, i int) {
 	e.Manifests[i] = m
 }
 
-// Maps the Dependency identifiers to the compute environment identifiers received from submitted jobs.
-// func (e *Event) mapDependencies(manifest *ComputeManifest) []string {
-// 	sdeps := make([]string, len(manifest.Dependencies))
-// 	for i, d := range manifest.Dependencies {
-// 		if sdep, ok := e.submissionIdMap[d]; ok {
-// 			sdeps[i] = sdep
-// 		}
-// 	}
-// 	return sdeps
-// }
-
-// // Maps the Dependency identifiers to the compute environment identifiers received from submitted jobs.
-// func dependenciesToStrings(manifest *ComputeManifest) []string {
-// 	sdeps := make([]string, len(manifest.Dependencies))
-// 	for i, d := range manifest.Dependencies {
-// 		sdeps[i] = d.String()
-// 	}
-// 	return sdeps
-// }
-
 /////////////////////////////
 ///////// PLUGIN ////////////
 
@@ -420,7 +385,7 @@ type Plugin struct {
 	Volumes            []PluginComputeVolumes   `json:"volumes" jsonschema:"title=Volume Mounts,description=Storage volumes that need to be mounted to the plugin when it is run"` //@NOTE: currently not used
 	Credentials        KeyValuePairs            `json:"credentials" jsonschema:"title=Credentials,description=Configures credentials/secrets from the service provider to be injected into the running container.  Note: DO NOT ENTER PASSWORDS OR ACTUAL CREDENTIALS"`
 	Parameters         map[string]string        `json:"parameters" jsonschema:"title=Parameters"` //@NOTE: currently not being used
-	RetryAttemts       int32                    `json:"retry_attempts" jsonschema:"title=Retry Attempts"`
+	RetryAttempts      int32                    `json:"retry_attempts" jsonschema:"title=Retry Attempts"`
 	ExecutionTimeout   *int32                   `json:"execution_timeout" jsonschema:"title=Execution Timeout (sec)"`
 	Privileged         bool                     `json:"privileged" jsonschema:"title=Requires Privileged Execution"` //assign container privileged execution.  for example to mount linux devices
 	LinuxParameters    LinuxParameters          `json:"linux_parameters" jsonschema:"title=Linux Parameters"`
