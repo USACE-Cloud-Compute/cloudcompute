@@ -2,6 +2,8 @@ module github.com/usace-cloud-compute/cloudcompute
 
 go 1.24.10
 
+replace github.com/usace-cloud-compute/cc-go-sdk => /Users/rdcrlrsg/Projects/programming/hec/cc-go-sdk
+
 toolchain go1.24.12
 
 //toolchain go1.24.5

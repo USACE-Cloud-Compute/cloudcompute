@@ -43,7 +43,7 @@ type StreamingEventGenerator struct {
 	eventId        string
 }
 
-func NewStreamingEventGeneratorForReader(event Event, perEventLoopData []map[string]string, reader io.Reader, delimiter string) (*StreamingEventGenerator, error) {
+func NewStreamingEventGeneratorForReader(event Event, perEventLoopData []map[string]string, reader io.Reader, delimiter string, ccStoreProfile string) (*StreamingEventGenerator, error) {
 	scanner := bufio.NewScanner(reader)
 	scanner.Split(splitAt(delimiter))
 
@@ -60,10 +60,10 @@ func NewStreamingEventGeneratorForReader(event Event, perEventLoopData []map[str
 	return seg, nil
 }
 
-func NewStreamingEventGenerator(event Event, perEventLoopData []map[string]string, scanner *bufio.Scanner) (*StreamingEventGenerator, error) {
+func NewStreamingEventGenerator(event Event, perEventLoopData []map[string]string, scanner *bufio.Scanner, ccStoreProfile string) (*StreamingEventGenerator, error) {
 	manifestCount := len(event.Manifests)
 	for i := 0; i < manifestCount; i++ {
-		err := event.Manifests[i].WritePayload()
+		err := event.Manifests[i].WritePayload(ccStoreProfile)
 		if err != nil {
 			return nil, fmt.Errorf("failed to write payload for manifest %s: %s", event.Manifests[i].ManifestID, err)
 		}

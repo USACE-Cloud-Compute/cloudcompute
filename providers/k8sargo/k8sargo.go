@@ -24,8 +24,22 @@ import (
 )
 
 const (
-	defaultNamespace string = "argo"
+	templateEntrypointName string = "cc-entrypoint"
+	defaultNamespace       string = "argo"
+	computeLabel           string = "compute"
+	eventLabel             string = "event"
+	jobLabel               string = "job"
 )
+
+var argoToCcStatusMap = map[string]string{
+	"Pending":   "PENDING",
+	"Running":   "RUNNING",
+	"Succeeded": "SUCCEDED",
+	"Skipped":   "FAILED",
+	"Failed":    "FAILED",
+	"Error":     "FAILED",
+	"Omitted":   "FAILED",
+}
 
 type ArgoWorkflowComputeProviderConfig struct {
 	Namespace  string `json:"namespace"`
@@ -40,14 +54,6 @@ type ArgoWorkflowComputeProvider struct {
 }
 
 func NewArgoWorkflowComputeProvider(config ArgoWorkflowComputeProviderConfig) (*ArgoWorkflowComputeProvider, error) {
-	// var (
-	// 	//argoServer = flag.String("argo-server", getEnvOrDefault("ARGO_SERVER", "localhost:2746"), "Argo Server address")
-	// 	token = flag.String("token", os.Getenv("ARGO_TOKEN"), "Bearer token for authentication")
-	// 	//namespace  = flag.String("namespace", "argo", "namespace for workflow")
-	// 	secure   = flag.Bool("secure", true, "whether the Argo Server uses TLS")
-	// 	insecure = flag.Bool("insecure-skip-verify", true, "skip TLS certificate verification")
-	// )
-	// flag.Parse()
 
 	secure := true
 	insecure := true
@@ -138,6 +144,11 @@ func (a *ArgoWorkflowComputeProvider) SubmitJobs(input cc.SubmitJobsInput) error
 			for _, specTmpl := range wft.Spec.Templates {
 				if specTmpl.Name == job.JobDefinition {
 					template = specTmpl.DeepCopy()
+					template.Inputs.Parameters = append(template.Inputs.Parameters, wfv1.Parameter{Name: jobLabel})
+					template.Metadata.Labels = map[string]string{
+						jobLabel: "{{inputs.parameters.job}}",
+					}
+					//template.Metadata.Annotations = job.Tags
 					templates = append(templates, *template)
 				}
 			}
@@ -187,6 +198,13 @@ func (a *ArgoWorkflowComputeProvider) SubmitJobs(input cc.SubmitJobsInput) error
 			}
 		}
 
+		for k, v := range job.Tags {
+			dagTaskParameters = append(dagTaskParameters, v1alpha1.Parameter{
+				Name:  k,
+				Value: v1alpha1.AnyStringPtr(v),
+			})
+		}
+
 		//start building the DAG Task
 		submittedJobName := fmt.Sprintf("j-%s", job.ID.String())
 		dagTask := v1alpha1.DAGTask{
@@ -234,12 +252,16 @@ func (a *ArgoWorkflowComputeProvider) SubmitJobs(input cc.SubmitJobsInput) error
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      workflowName,
 			Namespace: *a.namespace,
+			Labels: map[string]string{
+				computeLabel: input.ComputeId.String(),
+				eventLabel:   eventId,
+			},
 		},
 		Spec: v1alpha1.WorkflowSpec{
-			Entrypoint: "cc-entrypoint",
+			Entrypoint: templateEntrypointName,
 			Templates: []v1alpha1.Template{
 				{
-					Name: "cc-entrypoint",
+					Name: templateEntrypointName,
 					DAG: &v1alpha1.DAGTemplate{
 						Tasks: tasks,
 					},
@@ -310,105 +332,117 @@ func (a *ArgoWorkflowComputeProvider) UnregisterPlugin(nameAndRevision string) e
 	return nil
 }
 
-// argo workflows will use the event identifier as the Log Request Name, and the pod name for a specific filter
-func (a *ArgoWorkflowComputeProvider) JobLog(input cc.JobLogInput) (cc.JobLogOutput, error) {
-	req := &workflowpkg.WorkflowLogRequest{
+func (a *ArgoWorkflowComputeProvider) TerminateJobs(input cc.TerminateJobInput) error {
+
+	listReq := &workflowpkg.WorkflowListRequest{
 		Namespace: *a.namespace,
-		Name:      input.VendorJobId,
-		// Optional: specify a specific podName to only get logs for one step
-		PodName: input.AltId,
-		LogOptions: &corev1.PodLogOptions{
-			Container: "main",
-			Follow:    false, // Set to false for completed jobs
+		ListOptions: &metav1.ListOptions{
+			LabelSelector: fmt.Sprintf("%s=%s", computeLabel, input.Query.QueryValue.Compute),
 		},
 	}
 
-	//Open the log stream
-	stream, err := a.serviceClient.WorkflowLogs(a.ctx, req)
-	if err != nil {
-		return cc.JobLogOutput{}, fmt.Errorf("failed to open log stream: %v", err)
-	}
-
-	// Process the stream
-	for {
-		event, err := stream.Recv()
-		if err == io.EOF {
-			break // End of logs reached
-		}
-		if err != nil {
-			return cc.JobLogOutput{}, fmt.Errorf("error reading stream: %v", err)
-		}
-
-		// Print the log line
-		fmt.Println(event.Content)
-	}
-
-	//@TODO implement continuation tokens for cloud compute log requests
-	return cc.JobLogOutput{}, nil
-
-}
-
-// @TODO NOT WORKING OR TESTED
-func (a *ArgoWorkflowComputeProvider) TerminateJobs(input cc.TerminateJobInput) error {
-
-	_, err := a.serviceClient.TerminateWorkflow(context.Background(), &workflow.WorkflowTerminateRequest{
-		Name:      "test",
-		Namespace: *a.namespace,
-	})
-	if err != nil {
-		return fmt.Errorf("failed to terminate: %v", err)
-	}
-	return nil
-}
-
-func (a *ArgoWorkflowComputeProvider) Status(jobQueue string, query cc.JobsSummaryQuery) error {
-	wf, err := a.serviceClient.GetWorkflow(context.Background(), &workflowpkg.WorkflowGetRequest{
-		Namespace: *a.namespace,
-		Name:      query.QueryValue.Event,
-	})
+	workflowList, err := a.serviceClient.ListWorkflows(a.ctx, listReq)
 	if err != nil {
 		return err
 	}
 
-	fmt.Printf("Workflow: %s | Phase: %s\n", wf.Name, wf.Status.Phase)
-	createdTime := wf.CreationTimestamp.UnixMilli()
-	fmt.Println("Individual Task Statuses:")
+	for _, workflow := range workflowList.Items {
+		stopReq := &workflowpkg.WorkflowStopRequest{
+			Name:      workflow.Name,
+			Namespace: *a.namespace,
+			// Target the specific node where the input parameter 'task-guid' matches your ID
+			//NodeFieldSelector: "inputs.parameters.task-guid.value=" + guid,
+			Message: "Stopping Compute because i screwed up",
+		}
 
-	// 2. Iterate through Status.Nodes to find individual task results
-	//for nopw load into single array
-	//summaries:=make([]cc.JobSummary,len(wf.Status.Nodes))
+		_, err := a.serviceClient.StopWorkflow(a.ctx, stopReq)
+		log.Println(err)
+	}
+
+	return nil
+}
+
+func (a *ArgoWorkflowComputeProvider) JobLog(input cc.JobLogInput) (cc.JobLogOutput, error) {
+
+	output := cc.JobLogOutput{}
+
+	jobSelector := fmt.Sprintf("job=%s", input.VendorJobId) //jobid
+	logReq := &workflow.WorkflowLogRequest{
+		Namespace: *a.namespace,
+		Name:      input.EventId, //eventid
+		Selector:  jobSelector,
+		LogOptions: &corev1.PodLogOptions{
+			Container: "main",
+			Follow:    true,
+		},
+	}
+
+	stream, err := a.serviceClient.WorkflowLogs(a.ctx, logReq)
+	if err != nil {
+		return output, err
+	}
+
+	for {
+		resp, err := stream.Recv()
+		if err == io.EOF {
+			break
+		}
+		if err != nil {
+			return output, err
+		}
+		output.Logs = append(output.Logs, resp.Content)
+	}
+
+	//@TODO implement continuation tokens for cloud compute log requests
+	return output, nil
+
+}
+
+func (a *ArgoWorkflowComputeProvider) Status(jobQueue string, query cc.JobsSummaryQuery) error {
+	labelSelector := fmt.Sprintf("%s=%s", computeLabel, query.QueryValue.Compute)
+
+	req := &workflow.WorkflowListRequest{
+		Namespace: *a.namespace,
+		ListOptions: &metav1.ListOptions{
+			LabelSelector: labelSelector,
+		},
+	}
+
+	wfList, err := a.serviceClient.ListWorkflows(context.Background(), req)
+	if err != nil {
+		fmt.Printf("Error listing workflows: %v\n", err)
+		return err
+	}
+
 	summaries := []cc.JobSummary{}
 
-	for _, node := range wf.Status.Nodes {
-		// Node types include: "Pod", "Container", "DAG", "Steps"
-		// Most DAG tasks appear as "Pod" or "Container" types once running
-		if node.Type == wfv1.NodeTypePod || node.Type == wfv1.NodeTypeContainer {
-			startTime := node.StartedAt.Time.UnixMilli()
-			endTime := node.FinishedAt.Time.UnixMilli()
-			summaries = append(summaries, cc.JobSummary{
-				JobId:        node.ID,
-				JobName:      node.DisplayName,
-				CreatedAt:    &createdTime,
-				StartedAt:    &startTime,
-				Status:       argoToCcStatusMap[string(node.Phase)],
-				StatusDetail: &node.Message,
-				StoppedAt:    &endTime,
-				ResourceName: node.TemplateName,
-			})
+	for _, wf := range wfList.Items {
+		createdTime := wf.CreationTimestamp.UnixMilli()
+		for _, node := range wf.Status.Nodes {
+			if node.Type == wfv1.NodeTypePod || node.Type == wfv1.NodeTypeContainer {
+				startTime := node.StartedAt.Time.UnixMilli()
+				endTime := node.FinishedAt.Time.UnixMilli()
+				jobid := ""
+				for _, p := range node.Inputs.Parameters {
+					if p.Name == jobLabel {
+						jobid = p.GetValue()
+					}
+				}
+				summaries = append(summaries, cc.JobSummary{
+					JobId:        jobid,
+					JobName:      node.DisplayName,
+					CreatedAt:    &createdTime,
+					StartedAt:    &startTime,
+					Status:       argoToCcStatusMap[string(node.Phase)],
+					StatusDetail: &node.Message,
+					StoppedAt:    &endTime,
+					ResourceName: node.TemplateName,
+				})
+			}
 		}
 	}
 	query.JobSummaryFunction(summaries)
 	return nil
-}
-
-var argoToCcStatusMap = map[string]string{
-	"Pending":   "PENDING",
-	"Running":   "RUNNING",
-	"Succeeded": "SUCCEDED",
-	"Skipped":   "FAILED",
-	"Failed":    "FAILED",
-	"Error":     "FAILED",
-	"Omitted":   "FAILED",
 }
 
 func pluginToWorkflowTemplate(plugin *cc.Plugin) (*wfv1.WorkflowTemplate, error) {
@@ -466,12 +500,6 @@ func pluginToWorkflowTemplate(plugin *cc.Plugin) (*wfv1.WorkflowTemplate, error)
 		},
 	}
 
-	// if len(plugin.Command) > 0 {
-	// 	parameters = append(parameters, []wfv1.Parameter{
-
-	// 	}...)
-	// }
-
 	if plugin.ExecutionTimeout != nil && *plugin.ExecutionTimeout > 0 {
 		parameters = append(parameters, wfv1.Parameter{
 			Name:  "ExecutionTimeout",
@@ -497,16 +525,11 @@ func pluginToWorkflowTemplate(plugin *cc.Plugin) (*wfv1.WorkflowTemplate, error)
 		},
 	}
 
-	if plugin.RetryAttemts > 0 {
+	if plugin.RetryAttempts > 0 {
 		tmpl.RetryStrategy = &wfv1.RetryStrategy{
-			Limit: &intstr.IntOrString{IntVal: plugin.RetryAttemts},
+			Limit: &intstr.IntOrString{IntVal: plugin.RetryAttempts},
 		}
 	}
-
-	// moved this to podspecpathc so that it can be dynamically changed at the job level
-	// if plugin.ExecutionTimeout != nil && *plugin.ExecutionTimeout > 0 {
-	// 	tmpl.ActiveDeadlineSeconds = &intstr.IntOrString{IntVal: *plugin.ExecutionTimeout}
-	// }
 
 	if plugin.Privileged {
 		tmpl.Container.SecurityContext = &corev1.SecurityContext{
@@ -608,33 +631,6 @@ func getJobIdFromManifestId(manifestId uuid.UUID, jobs []*cc.Job) string {
 	}
 	return ""
 }
-
-// func depsToArgoDeps(job *cc.Job, jobs []*cc.Job) []string {
-// 	if len(job.DependsOn) > 0 {
-// 		argoDeps := make([]string, len(job.DependsOn))
-// 		for i, dep := range job.DependsOn {
-// 			argoDeps[i] = fmt.Sprintf("e-%s", dep)
-// 		}
-// 		return argoDeps
-// 	} else if len(job.ManifestDependencies) > 0 {
-// 		argoDeps := make([]string, len(job.ManifestDependencies))
-// 		for i, dep := range job.ManifestDependencies {
-
-// 			argoDeps[i] = fmt.Sprintf("e-%s", dep.String())
-// 		}
-// 		return argoDeps
-// 	}
-// 	return []string{}
-// }
-
-// func getJobByManifest(manifestId uuid.UUID, jobs []*cc.Job) *cc.Job {
-// 	for i, j := range jobs {
-// 		if j.ManifestID == manifestId {
-// 			return jobs[i]
-// 		}
-// 	}
-// 	return nil
-// }
 
 func getResourceOrDefault(resources []cc.ResourceRequirement, resourceType cc.ResourceType, defaultVal string) string {
 	for _, resource := range resources {
