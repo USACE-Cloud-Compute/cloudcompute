@@ -29,6 +29,7 @@ const (
 	computeLabel           string = "compute"
 	eventLabel             string = "event"
 	jobLabel               string = "job"
+	ccEventIdentifier      string = "CC_EVENT_IDENTIFIER"
 )
 
 var argoToCcStatusMap = map[string]string{
@@ -100,7 +101,8 @@ func (a *ArgoWorkflowComputeProvider) SubmitJobs(input cc.SubmitJobsInput) error
 
 	//within the argo environment, events will be submitted as s single workflow
 	//the event id will be used for the workflow name
-	eventId := input.Jobs[0].EventID.String()
+	eventIdentifier := input.Jobs[0].ContainerOverrides.Environment.GetVal(ccEventIdentifier)
+	eventId := fmt.Sprintf("%s.%s", input.Jobs[0].EventID.String(), eventIdentifier)
 	workflowName := eventId
 	if input.Jobs[0].PerEventLoopNum > 0 {
 		workflowName += fmt.Sprintf(".%d", input.Jobs[0].PerEventLoopNum)
