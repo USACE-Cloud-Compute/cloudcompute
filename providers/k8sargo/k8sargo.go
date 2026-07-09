@@ -97,11 +97,45 @@ func NewArgoWorkflowComputeProvider(config ArgoWorkflowComputeProviderConfig) (*
 
 }
 
+func toSlugFast(name string) string {
+	var builder strings.Builder
+	// Pre-allocate memory to match input length (avoids reallocation)
+	builder.Grow(len(name))
+
+	inHyphenSequence := false
+
+	for i := 0; i < len(name); i++ {
+		b := name[i]
+
+		// Check for alphanumeric characters and lowercase them on the fly
+		switch {
+		case b >= 'A' && b <= 'Z':
+			b = b + 32 // Fast lowercase conversion for ASCII
+			builder.WriteByte(b)
+			inHyphenSequence = false
+		case b >= 'a' && b <= 'z', b >= '0' && b <= '9':
+			builder.WriteByte(b)
+			inHyphenSequence = false
+		default:
+			// If it's a space or punctuation, write a single hyphen
+			if !inHyphenSequence {
+				builder.WriteByte('-')
+				inHyphenSequence = true
+			}
+		}
+	}
+
+	result := builder.String()
+
+	// Clean up leading and trailing hyphens
+	return strings.Trim(result, "-")
+}
+
 func (a *ArgoWorkflowComputeProvider) SubmitJobs(input cc.SubmitJobsInput) error {
 
 	//within the argo environment, events will be submitted as s single workflow
 	//the event id will be used for the workflow name
-	eventIdentifier := input.Jobs[0].ContainerOverrides.Environment.GetVal(ccEventIdentifier)
+	eventIdentifier := toSlugFast(input.Jobs[0].ContainerOverrides.Environment.GetVal(ccEventIdentifier))
 	eventId := fmt.Sprintf("%s.%s", input.Jobs[0].EventID.String(), eventIdentifier)
 	workflowName := eventId
 	if input.Jobs[0].PerEventLoopNum > 0 {
