@@ -155,3 +155,19 @@ err = provider.SubmitJob(jobInput)
 2. Depends on Kubernetes cluster access
 3. Uses specific Argo Workflow API versions
 4. Environment variable handling requires careful configuration for security
+
+
+todo:
+ - large block support
+   - how does argo map to batch with respect to instance types and queues
+   - how can argo/k8s pods request a larger block chunk of the nodes resources, or do they share the same block fs?
+     1) create a new node type
+     2) determine how to execute on specific node types
+ - volume mounts (NFS/CIFS)
+   - cc.PluginComputeVolumes
+   - how to mount a network file system?
+ - volume mounts (Linux Device)
+   - cc.LinuxParameters
+   - how to mount a host volume (node) to a running container(pod)?
+     - 1) create storage mount(fs) and mount rw to node
+     - 2) if that is mounted, mount into a running pod

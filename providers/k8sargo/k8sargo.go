@@ -19,6 +19,7 @@ import (
 	"github.com/google/uuid"
 	cc "github.com/usace-cloud-compute/cloudcompute"
 	corev1 "k8s.io/api/core/v1"
+	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/util/intstr"
 )
@@ -95,40 +96,6 @@ func NewArgoWorkflowComputeProvider(config ArgoWorkflowComputeProviderConfig) (*
 		namespace:     &config.Namespace,
 	}, nil
 
-}
-
-func toSlugFast(name string) string {
-	var builder strings.Builder
-	// Pre-allocate memory to match input length (avoids reallocation)
-	builder.Grow(len(name))
-
-	inHyphenSequence := false
-
-	for i := 0; i < len(name); i++ {
-		b := name[i]
-
-		// Check for alphanumeric characters and lowercase them on the fly
-		switch {
-		case b >= 'A' && b <= 'Z':
-			b = b + 32 // Fast lowercase conversion for ASCII
-			builder.WriteByte(b)
-			inHyphenSequence = false
-		case b >= 'a' && b <= 'z', b >= '0' && b <= '9':
-			builder.WriteByte(b)
-			inHyphenSequence = false
-		default:
-			// If it's a space or punctuation, write a single hyphen
-			if !inHyphenSequence {
-				builder.WriteByte('-')
-				inHyphenSequence = true
-			}
-		}
-	}
-
-	result := builder.String()
-
-	// Clean up leading and trailing hyphens
-	return strings.Trim(result, "-")
 }
 
 func (a *ArgoWorkflowComputeProvider) SubmitJobs(input cc.SubmitJobsInput) error {
@@ -561,9 +528,49 @@ func pluginToWorkflowTemplate(plugin *cc.Plugin) (*wfv1.WorkflowTemplate, error)
 		},
 	}
 
+	//set up ephemeral storage (a.k.a. container block size) if configured
+	if plugin.ComputeEnvironment.EphemeralStorage != "" {
+		resourceQuantity, err := resource.ParseQuantity(plugin.ComputeEnvironment.EphemeralStorage)
+		if err != nil {
+			return nil, fmt.Errorf("invalid resource quanity: %s", plugin.ComputeEnvironment.EphemeralStorage)
+		}
+		tmpl.Container.Resources = corev1.ResourceRequirements{
+			Requests: corev1.ResourceList{
+				corev1.ResourceEphemeralStorage: resourceQuantity,
+			},
+			Limits: corev1.ResourceList{
+				corev1.ResourceEphemeralStorage: resourceQuantity,
+			},
+		}
+	}
+
 	if plugin.RetryAttempts > 0 {
 		tmpl.RetryStrategy = &wfv1.RetryStrategy{
 			Limit: &intstr.IntOrString{IntVal: plugin.RetryAttempts},
+		}
+	}
+
+	//add shared volumes
+	//for the argo implementation, shared volumes are Persistent Volume (PV) and Claim (PVC)
+	//and must be configured in the kubernetes cluster
+	//the cc PluginComputeVolume resource name maps to the k8s shared volume PVC name
+	if len(plugin.Volumes) > 0 {
+		for i, v := range plugin.Volumes {
+			volumes := make([]corev1.Volume, len(plugin.LinuxParameters.Devices))
+			volumeMounts := make([]corev1.VolumeMount, len(plugin.LinuxParameters.Devices))
+			volumes[i] = corev1.Volume{
+				Name: fmt.Sprintf("shared-volume-%d", i),
+				VolumeSource: corev1.VolumeSource{
+					PersistentVolumeClaim: &corev1.PersistentVolumeClaimVolumeSource{
+						ClaimName: v.ResourceName,
+						ReadOnly:  v.ReadOnly,
+					},
+				},
+			}
+			volumeMounts[i] = corev1.VolumeMount{
+				Name:      fmt.Sprintf("shared-volume-%d", i),
+				MountPath: v.MountPoint,
+			}
 		}
 	}
 
@@ -688,4 +695,38 @@ func getTemplate(templates []v1alpha1.Template, name string) *v1alpha1.Template 
 
 func toPtr[T any](t T) *T {
 	return &t
+}
+
+func toSlugFast(name string) string {
+	var builder strings.Builder
+	// Pre-allocate memory to match input length (avoids reallocation)
+	builder.Grow(len(name))
+
+	inHyphenSequence := false
+
+	for i := 0; i < len(name); i++ {
+		b := name[i]
+
+		// Check for alphanumeric characters and lowercase them on the fly
+		switch {
+		case b >= 'A' && b <= 'Z':
+			b = b + 32 // Fast lowercase conversion for ASCII
+			builder.WriteByte(b)
+			inHyphenSequence = false
+		case b >= 'a' && b <= 'z', b >= '0' && b <= '9':
+			builder.WriteByte(b)
+			inHyphenSequence = false
+		default:
+			// If it's a space or punctuation, write a single hyphen
+			if !inHyphenSequence {
+				builder.WriteByte('-')
+				inHyphenSequence = true
+			}
+		}
+	}
+
+	result := builder.String()
+
+	// Clean up leading and trailing hyphens
+	return strings.Trim(result, "-")
 }

@@ -389,9 +389,12 @@ type Plugin struct {
 	ExecutionTimeout   *int32                   `json:"execution_timeout" jsonschema:"title=Execution Timeout (sec)"`
 	Privileged         bool                     `json:"privileged" jsonschema:"title=Requires Privileged Execution"` //assign container privileged execution.  for example to mount linux devices
 	LinuxParameters    LinuxParameters          `json:"linux_parameters" jsonschema:"title=Linux Parameters"`
-	MountPoints        []MountPoint             `json:"mountpoints" jsonschema:"title=MountPoints"` //@NOTE: currently not being used
+	MountPoints        []MountPoint             `json:"mountpoints" jsonschema:"title=MountPoints"` //@NOTE: currently being used for docker provider
 }
 
+// linux parameters are designed to map host resource devices directly into the container
+// for example "/dev/fuse" for fuse file system support.
+// typically this will require "Privileged" to be true
 type LinuxParameters struct {
 	Devices []LinuxDevice `json:"devices" jsonschema:"title=Devices"`
 }
@@ -411,6 +414,9 @@ type PluginComputeEnvironment struct {
 	VCPU       string   `json:"vcpu" jsonschema:"title=Virtual CPUs"`
 	Memory     string   `json:"memory" jsonschema:"title=Memory in MiB"`
 	ExtraHosts []string `json:"extraHosts" jsonschema:"title=Extra Hosts for the Docker API"`
+
+	//k8s argo specific setting for local containers storage block size.  Value must be a valid k8s resource value.  e.g. 10Gi for 10 Gibibyte block
+	EphemeralStorage string `json:"ephemeralStorage" jsonschema:"title=k8s argo only local ephemeral storage.  Ignored by other compute providers"`
 }
 
 type PluginComputeVolumes struct {
