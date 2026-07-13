@@ -2,7 +2,7 @@ module github.com/usace-cloud-compute/cloudcompute
 
 go 1.24.10
 
-replace github.com/usace-cloud-compute/cc-go-sdk => /Users/rdcrlrsg/Projects/programming/hec/cc-go-sdk
+//replace github.com/usace-cloud-compute/cc-go-sdk => /Users/rdcrlrsg/Projects/programming/hec/cc-go-sdk
 
 toolchain go1.24.12
 
@@ -18,7 +18,7 @@ require (
 	github.com/docker/docker v28.5.1+incompatible
 	github.com/google/uuid v1.6.0
 	github.com/stretchr/testify v1.11.1
-	github.com/usace-cloud-compute/cc-go-sdk v0.0.0-20251124210849-b455e063a7ea
+	github.com/usace-cloud-compute/cc-go-sdk v0.0.0-20260713194439-5257907f1faa
 	k8s.io/api v0.33.3
 	k8s.io/apimachinery v0.33.3
 	k8s.io/client-go v0.33.3
