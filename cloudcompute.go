@@ -112,6 +112,9 @@ func (cc *CloudCompute) RunParallel(concurrency int) error {
 			manifestJobs := make([]*Job, len(event.Manifests))
 
 			for i, manifest := range event.Manifests {
+				if manifest.Tags == nil {
+					manifest.Tags = make(map[string]string)
+				}
 				if len(manifest.Inputs.PayloadAttributes) > 0 || len(manifest.Inputs.DataSources) > 0 || len(manifest.Actions) > 0 { //@TODO...ADD OUTPUT DATA SOURCES
 					err := manifest.WritePayload(cc.ProviderStoreProfile) //guarantees the payload is written to the manifest
 					if err != nil {
@@ -279,9 +282,9 @@ func (cm *ComputeManifest) WritePayload(storeProfile string) error {
 		if err != nil {
 			return err
 		}
-		if cm.Tags == nil {
-			cm.Tags = make(map[string]string)
-		}
+		// if cm.Tags == nil {
+		// 	cm.Tags = make(map[string]string)
+		// }
 		cm.Tags[payloadTag] = payloadId.String()
 		cm.payloadID = payloadId
 	}
