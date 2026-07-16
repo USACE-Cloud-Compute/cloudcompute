@@ -108,7 +108,7 @@ func TestArgoDiamondDependencyRun(t *testing.T) {
 			SubmissionIdMap: make(map[uuid.UUID]string),
 		}
 
-		err := argoservice.SubmitJobs(event)
+		_, err := argoservice.SubmitJobs(event)
 		submissionId := event.SubmissionIdMap[manifestId]
 		fmt.Println(submissionId)
 		assert.NoError(t, err, "Submit Jobs should succeed for the test job")
@@ -172,7 +172,7 @@ func subTestArgoComputeProvider(t *testing.T, terminate bool) {
 			SubmissionIdMap: make(map[uuid.UUID]string),
 		}
 
-		err := argoservice.SubmitJobs(event)
+		_, err := argoservice.SubmitJobs(event)
 		submissionId = event.SubmissionIdMap[manifestID]
 		fmt.Println(submissionId)
 		assert.NoError(t, err, "Submit Jobs should succeed for the test job")

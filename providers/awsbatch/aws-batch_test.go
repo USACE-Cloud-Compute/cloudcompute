@@ -78,9 +78,10 @@ func subTestAWSBatchComputeProvider(t *testing.T, terminate bool) {
 			SubmissionIdMap: make(map[uuid.UUID]string),
 		}
 
-		err := awsbatch.SubmitJobs(event)
+		workflowName, err := awsbatch.SubmitJobs(event)
 		submissionId = event.SubmissionIdMap[manifestID]
 		fmt.Println(submissionId)
+		fmt.Println(workflowName)
 		assert.NoError(t, err, "Submit Jobs should succeed for the test job")
 	})
 

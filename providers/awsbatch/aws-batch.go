@@ -99,9 +99,11 @@ func NewAwsBatchProvider(input AwsBatchProviderInput) (*AwsBatchProvider, error)
 
 // SubmitJob submits a job to AWS Batch
 // It takes a Job struct and returns an error if submission fails
-func (abp *AwsBatchProvider) SubmitJobs(event SubmitJobsInput) error {
+func (abp *AwsBatchProvider) SubmitJobs(event SubmitJobsInput) (string, error) {
 	//submissionIdMap := make(map[uuid.UUID]string)
+	var workflowName string
 	for _, job := range event.Jobs {
+		workflowName = job.EventID.String()
 		var retryStrategy *types.RetryStrategy
 		var timeout *types.JobTimeout
 
@@ -130,9 +132,10 @@ func (abp *AwsBatchProvider) SubmitJobs(event SubmitJobsInput) error {
 		submitResult, err := abp.client.SubmitJob(ctx, submitJobInput)
 		if err != nil {
 			log.Printf("Failed to submit batch job: %s using definition %s on queue %s.\n", job.JobName, job.JobDefinition, job.JobQueue)
-			return err
+			return workflowName, err
 		}
 
+		//add the vendor id to the job
 		job.SubmittedJob = &SubmitJobResult{
 			JobId:        submitResult.JobId,
 			ResourceName: submitResult.JobArn,
@@ -143,7 +146,7 @@ func (abp *AwsBatchProvider) SubmitJobs(event SubmitJobsInput) error {
 		event.SubmissionIdMap[job.ManifestID] = *job.SubmittedJob.JobId
 	}
 
-	return nil
+	return workflowName, nil
 }
 
 // RegisterPlugin registers a plugin with AWS Batch

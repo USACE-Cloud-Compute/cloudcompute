@@ -93,13 +93,15 @@ func (dcp *DockerComputeProvider) RegisterPlugin(plugin *Plugin) (PluginRegistra
 // }
 
 // SubmitJob submits a job for execution.
-func (dcp *DockerComputeProvider) SubmitJobs(event SubmitJobsInput) error {
+func (dcp *DockerComputeProvider) SubmitJobs(event SubmitJobsInput) (string, error) {
 	//submissionIdMap := make(map[uuid.UUID]string)
+	var workflowName string
 	for _, job := range event.Jobs {
+		workflowName = job.EventID.String()
 		jobid := uuid.New().String()
 		plugin, err := dcp.registry.Get(job.JobDefinition)
 		if err != nil {
-			return err
+			return workflowName, err
 		}
 
 		job.DependsOn = event.MapDependencies(job)
@@ -118,7 +120,7 @@ func (dcp *DockerComputeProvider) SubmitJobs(event SubmitJobsInput) error {
 			SecretsManager: dcp.sm,
 		})
 	}
-	return nil
+	return workflowName, nil
 }
 
 // Maps the Dependency identifiers to the compute environment identifiers received from submitted jobs.

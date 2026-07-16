@@ -93,7 +93,7 @@ func (se *SubmitJobsInput) MapDependencies(job *Job) []string {
 
 // Interface for a compute provider.
 type ComputeProvider interface {
-	SubmitJobs(input SubmitJobsInput) error
+	SubmitJobs(input SubmitJobsInput) (string, error)
 	//SubmitJobs(input Event) error
 	TerminateJobs(input TerminateJobInput) error
 	Status(jobQueue string, query JobsSummaryQuery) error

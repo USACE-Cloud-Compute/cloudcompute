@@ -47,7 +47,7 @@ func TestDockerComputeProvider_Integration(t *testing.T) {
 			SubmissionIdMap: make(map[uuid.UUID]string),
 		}
 
-		err = dcp.SubmitJobs(input)
+		_, err = dcp.SubmitJobs(input)
 		assert.NoError(t, err)
 
 		// 4. Verify Status transitions

@@ -98,7 +98,7 @@ func NewArgoWorkflowComputeProvider(config ArgoWorkflowComputeProviderConfig) (*
 
 }
 
-func (a *ArgoWorkflowComputeProvider) SubmitJobs(input cc.SubmitJobsInput) error {
+func (a *ArgoWorkflowComputeProvider) SubmitJobs(input cc.SubmitJobsInput) (string, error) {
 
 	//within the argo environment, events will be submitted as s single workflow
 	//the event id will be used for the workflow name
@@ -131,7 +131,7 @@ func (a *ArgoWorkflowComputeProvider) SubmitJobs(input cc.SubmitJobsInput) error
 		if template == nil {
 			templateClient, err := a.client.NewWorkflowTemplateServiceClient()
 			if err != nil {
-				return err
+				return workflowName, err
 			}
 
 			req := &workflowtemplatepb.WorkflowTemplateGetRequest{
@@ -141,7 +141,7 @@ func (a *ArgoWorkflowComputeProvider) SubmitJobs(input cc.SubmitJobsInput) error
 
 			wft, err := templateClient.GetWorkflowTemplate(a.ctx, req)
 			if err != nil {
-				return err
+				return workflowName, err
 			}
 
 			for _, specTmpl := range wft.Spec.Templates {
@@ -158,7 +158,7 @@ func (a *ArgoWorkflowComputeProvider) SubmitJobs(input cc.SubmitJobsInput) error
 		}
 
 		if template == nil {
-			return fmt.Errorf("missing template: %s", job.JobDefinition)
+			return workflowName, fmt.Errorf("missing template: %s", job.JobDefinition)
 		}
 
 		//create the environment variables unique to this task/job
@@ -176,7 +176,7 @@ func (a *ArgoWorkflowComputeProvider) SubmitJobs(input cc.SubmitJobsInput) error
 		//marshall to json so that the env vars can be merged into the podSpecPatch
 		envJson, err := json.Marshal(tmplEnv)
 		if err != nil {
-			return err
+			return workflowName, err
 		}
 		dagTaskParameters = append(dagTaskParameters, v1alpha1.Parameter{
 			Name:  "DagTaskEnv",
@@ -229,7 +229,7 @@ func (a *ArgoWorkflowComputeProvider) SubmitJobs(input cc.SubmitJobsInput) error
 				args := job.ContainerOverrides.Command[1:]
 				jsonArgs, err := json.Marshal(args)
 				if err != nil {
-					return err
+					return workflowName, err
 				}
 				dagTask.Arguments.Parameters = append(dagTask.Arguments.Parameters, v1alpha1.Parameter{
 					Name:  "ExecArgs",
@@ -282,11 +282,7 @@ func (a *ArgoWorkflowComputeProvider) SubmitJobs(input cc.SubmitJobsInput) error
 		Workflow:  wf,
 	})
 
-	if err != nil {
-		return err
-	}
-
-	return nil
+	return workflowName, err
 }
 
 func (a *ArgoWorkflowComputeProvider) RegisterPlugin(plugin *cc.Plugin) (cc.PluginRegistrationOutput, error) {
