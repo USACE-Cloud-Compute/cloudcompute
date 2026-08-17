@@ -177,7 +177,11 @@ func (cc *CloudCompute) RunParallel(concurrency int) error {
 				manifestJobs[i] = &job
 
 			}
-			workflowName, err := cc.ComputeProvider.SubmitJobs(SubmitJobsInput{
+
+			//computeEventName is a string representation of the event guid with an eventIdentifier concatonated.
+			//it is required to support argo workflows so that each event submitted as a workflow for an array or stream
+			//event generator has a unique identifier
+			computeEventName, err := cc.ComputeProvider.SubmitJobs(SubmitJobsInput{
 				ComputeId:       cc.ID,
 				Jobs:            manifestJobs,
 				SubmissionIdMap: make(map[uuid.UUID]string),
@@ -188,7 +192,7 @@ func (cc *CloudCompute) RunParallel(concurrency int) error {
 			}
 			if cc.JobStore != nil {
 				for _, job := range manifestJobs {
-					err := cc.JobStore.SaveJob(cc.ID, job.PayloadID, event.EventIdentifier, workflowName, job)
+					err := cc.JobStore.SaveJob(cc.ID, job.PayloadID, event.EventIdentifier, computeEventName, job)
 					if err != nil {
 						log.Printf("error saving job for event %s: %s:\n", event.EventIdentifier, err)
 						return //@TODO should we terminate everything if we cannot save to the compute store?
@@ -436,7 +440,7 @@ type PluginRegistrationOutput struct {
 }
 
 type CcJobStore interface {
-	SaveJob(computeId uuid.UUID, payloadId uuid.UUID, event string, workflowName string, job *Job) error
+	SaveJob(computeId uuid.UUID, payloadId uuid.UUID, event string, computeEventName string, job *Job) error
 }
 
 type CcMessageQueue interface {
