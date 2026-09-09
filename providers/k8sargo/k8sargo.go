@@ -644,7 +644,7 @@ func getEnvOrDefault(key, defaultValue string) string {
 func depsToArgoDeps(deps []string) []string {
 	argoDeps := make([]string, len(deps))
 	for i, dep := range deps {
-		argoDeps[i] = fmt.Sprintf("e-%s", dep)
+		argoDeps[i] = fmt.Sprintf("j-%s", dep)
 	}
 	return argoDeps
 }
