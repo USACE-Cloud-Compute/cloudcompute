@@ -353,6 +353,8 @@ func (abp *AwsBatchProvider) Status(jobQueue string, query JobsSummaryQuery) err
 		queryString = fmt.Sprintf("%s_c_%s_e_%s_j_%s", jobPrefix, query.QueryValue.Compute, query.QueryValue.Event, query.QueryValue.Job)
 	}
 
+	log.Printf("Querying: %s\n", queryString)
+
 	eventFilter := types.KeyValuesPair{
 		Name:   aws.String("JOB_NAME"),
 		Values: []string{queryString},
