@@ -7,6 +7,7 @@ import (
 	"errors"
 	"fmt"
 	"log"
+	"strings"
 	"time"
 
 	"github.com/aws/aws-sdk-go-v2/aws"
@@ -341,14 +342,15 @@ func (abp *AwsBatchProvider) Status(jobQueue string, query JobsSummaryQuery) err
 		return errors.New("missing JubSummaryFunction, you have no way to process the result")
 	}
 
+	jobPrefix := strings.ToLower(CcProfile)
 	var queryString string
 	switch query.QueryLevel {
 	case SUMMARY_COMPUTE:
-		queryString = fmt.Sprintf("%s_c_%s*", CcProfile, query.QueryValue.Compute)
+		queryString = fmt.Sprintf("%s_c_%s*", jobPrefix, query.QueryValue.Compute)
 	case SUMMARY_EVENT:
-		queryString = fmt.Sprintf("%s_c_%s_e_%s*", CcProfile, query.QueryValue.Compute, query.QueryValue.Event)
+		queryString = fmt.Sprintf("%s_c_%s_e_%s*", jobPrefix, query.QueryValue.Compute, query.QueryValue.Event)
 	case SUMMARY_JOB:
-		queryString = fmt.Sprintf("%s_c_%s_e_%s_j_%s", CcProfile, query.QueryValue.Compute, query.QueryValue.Event, query.QueryValue.Job)
+		queryString = fmt.Sprintf("%s_c_%s_e_%s_j_%s", jobPrefix, query.QueryValue.Compute, query.QueryValue.Event, query.QueryValue.Job)
 	}
 
 	eventFilter := types.KeyValuesPair{
