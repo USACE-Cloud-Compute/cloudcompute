@@ -446,8 +446,12 @@ github.com/usace-cloud-compute/cc-go-sdk v0.0.0-20251124210849-b455e063a7ea h1:t
 github.com/usace-cloud-compute/cc-go-sdk v0.0.0-20251124210849-b455e063a7ea/go.mod h1:HZsGTrNUUdjfqqJJaLpSBEKoIDmu/vnye2KK/AwchDo=
 github.com/usace-cloud-compute/cc-go-sdk v0.0.0-20260713194439-5257907f1faa h1:p+/2D6f15+7BVMnmfP2BlkP7f+FWAXgG6mQxf3+bODs=
 github.com/usace-cloud-compute/cc-go-sdk v0.0.0-20260713194439-5257907f1faa/go.mod h1:HZsGTrNUUdjfqqJJaLpSBEKoIDmu/vnye2KK/AwchDo=
+github.com/usace-cloud-compute/cc-go-sdk v0.0.0-20261030130035-a64f36e73f76 h1:mSGhP0dFKJ+ELixxnUieAZN5qWsG+E/XPRSV6zojeU4=
+github.com/usace-cloud-compute/cc-go-sdk v0.0.0-20261030130035-a64f36e73f76/go.mod h1:I/02gJqtCPB7jx/dwy0pWwqY9yOCVxgOZ87jEqA8pUg=
 github.com/usace-cloud-compute/filesapi v0.0.0-20251107191432-8084e0da4b5c h1:1Srw2WpT9tcEIUY853oeojXJjPH8iTYFGLXPaIrUe+I=
 github.com/usace-cloud-compute/filesapi v0.0.0-20251107191432-8084e0da4b5c/go.mod h1:6iMo7JYrqbf0dfSVGqrAJfoVhi2hKJysD5o8mXi0XhI=
+github.com/usace-cloud-compute/filesapi v0.0.0-20261019130306-86cdead80864 h1:234gx6le67MDfKsY7Bju6qQ7PQwhGVnPqQ+99yxLLtg=
+github.com/usace-cloud-compute/filesapi v0.0.0-20261019130306-86cdead80864/go.mod h1:6iMo7JYrqbf0dfSVGqrAJfoVhi2hKJysD5o8mXi0XhI=
 github.com/valyala/bytebufferpool v1.0.0 h1:GqA5TC/0021Y/b9FG4Oi9Mr3q7XYx6KllzawFIhcdPw=
 github.com/valyala/bytebufferpool v1.0.0/go.mod h1:6bBcMArwyJ5K/AmCkWv1jt77kVWyCJ6HpOuEn7z0Csc=
 github.com/valyala/fasttemplate v1.2.2 h1:lxLXG0uE3Qnshl9QyaK6XJxMXlQZELvChBOCmQD0Loo=

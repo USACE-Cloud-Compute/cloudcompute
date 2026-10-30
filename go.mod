@@ -18,7 +18,7 @@ require (
 	github.com/docker/docker v28.5.1+incompatible
 	github.com/google/uuid v1.6.0
 	github.com/stretchr/testify v1.11.1
-	github.com/usace-cloud-compute/cc-go-sdk v0.0.0-20260713194439-5257907f1faa
+	github.com/usace-cloud-compute/cc-go-sdk v0.0.0-20261030130035-a64f36e73f76
 	k8s.io/api v0.33.3
 	k8s.io/apimachinery v0.33.3
 	k8s.io/client-go v0.33.3
@@ -159,7 +159,7 @@ require (
 	github.com/tklauser/go-sysconf v0.3.12 // indirect
 	github.com/tklauser/numcpus v0.6.1 // indirect
 	github.com/upper/db/v4 v4.10.0 // indirect
-	github.com/usace-cloud-compute/filesapi v0.0.0-20251107191432-8084e0da4b5c // indirect
+	github.com/usace-cloud-compute/filesapi v0.0.0-20261019130306-86cdead80864 // indirect
 	github.com/valyala/bytebufferpool v1.0.0 // indirect
 	github.com/valyala/fasttemplate v1.2.2 // indirect
 	github.com/wk8/go-ordered-map/v2 v2.1.8 // indirect
