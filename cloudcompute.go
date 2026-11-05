@@ -63,7 +63,9 @@ func (cc *CloudCompute) Run() error {
 // currently an event number of -1 represents an invalid event received from the event generator.
 // These events are skipped
 func (cc *CloudCompute) RunParallel(concurrency int) error {
-	//cc.submissionIdMap = make(map[uuid.UUID]string)
+	if concurrency < 1 {
+		return fmt.Errorf("submission concurrency must be positive: %d", concurrency)
+	}
 
 	cr := NewConcurrentRunner(concurrency)
 
