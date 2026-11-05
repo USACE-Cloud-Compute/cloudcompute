@@ -4,6 +4,7 @@ import (
 	"errors"
 	"fmt"
 	"log"
+	"maps"
 	"strings"
 
 	. "github.com/usace-cloud-compute/cc-go-sdk"
@@ -112,9 +113,7 @@ func (cc *CloudCompute) RunParallel(concurrency int) error {
 			manifestJobs := make([]*Job, len(event.Manifests))
 
 			for i, manifest := range event.Manifests {
-				if manifest.Tags == nil {
-					manifest.Tags = make(map[string]string)
-				}
+
 				if len(manifest.Inputs.PayloadAttributes) > 0 || len(manifest.Inputs.DataSources) > 0 || len(manifest.Actions) > 0 { //@TODO...ADD OUTPUT DATA SOURCES
 					err := manifest.WritePayload(cc.ProviderStoreProfile) //guarantees the payload is written to the manifest
 					if err != nil {
@@ -133,7 +132,7 @@ func (cc *CloudCompute) RunParallel(concurrency int) error {
 					env = append(env, KeyValuePair{CcEventNumber, fmt.Sprint(event.EventIdentifier)})
 				}
 
-				//the manifest substitution is will be removed in future versions.
+				//the manifest substitution will be removed in future versions.
 				//it is only supported now to ease the transition to payloadId vs manifestId
 				if !env.HasKey(CcManifestId) {
 					env = append(env, KeyValuePair{CcManifestId, manifest.ManifestID.String()})
@@ -146,25 +145,31 @@ func (cc *CloudCompute) RunParallel(concurrency int) error {
 
 				jobID := uuid.New()
 
+				var tags map[string]string
+				if manifest.Tags == nil {
+					tags = make(map[string]string)
+				} else {
+					tags = maps.Clone(manifest.Tags)
+				}
+
 				//add tags:
-				manifest.Tags[computeTag] = cc.ID.String()
-				manifest.Tags[eventTag] = event.ID.String()
-				manifest.Tags[manifestTag] = manifest.ManifestID.String()
-				manifest.Tags[jobTag] = jobID.String()
+				tags[computeTag] = cc.ID.String()
+				tags[eventTag] = event.ID.String()
+				tags[manifestTag] = manifest.ManifestID.String()
+				tags[jobTag] = jobID.String()
 
 				job := Job{
-					ID:              jobID,
-					EventID:         event.ID,
-					PerEventLoopNum: event.PerEventLoopNum,
-					ManifestID:      manifest.ManifestID,
-					PayloadID:       manifest.payloadID,
-					//JobName:       fmt.Sprintf("%s_C_%s_E_%s_J_%s", CcProfile, cc.ID.String(), event.ID.String(), jobID),
+					ID:                   jobID,
+					EventID:              event.ID,
+					PerEventLoopNum:      event.PerEventLoopNum,
+					ManifestID:           manifest.ManifestID,
+					PayloadID:            manifest.payloadID,
 					JobName:              fmt.Sprintf("%s_c_%s_e_%s_j_%s", strings.ToLower(CcProfile), cc.ID.String(), event.ID.String(), jobID),
 					JobQueue:             cc.JobQueue,
 					JobDefinition:        manifest.PluginDefinition,
 					ManifestDependencies: manifest.Dependencies, //dependenciesToStrings(&manifest),
 					Parameters:           manifest.Inputs.Parameters,
-					Tags:                 manifest.Tags,
+					Tags:                 tags,
 					RetryAttempts:        manifest.RetryAttempts,
 					JobTimeout:           manifest.JobTimeout,
 					ContainerOverrides: ContainerOverrides{
