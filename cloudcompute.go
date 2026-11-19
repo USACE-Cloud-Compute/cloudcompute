@@ -293,9 +293,9 @@ func (cm *ComputeManifest) WritePayload(storeProfile string) error {
 		if err != nil {
 			return err
 		}
-		// if cm.Tags == nil {
-		// 	cm.Tags = make(map[string]string)
-		// }
+		if cm.Tags == nil {
+			cm.Tags = make(map[string]string)
+		}
 		cm.Tags[payloadTag] = payloadId.String()
 		cm.payloadID = payloadId
 	}
